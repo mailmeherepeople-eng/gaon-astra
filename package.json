@@ -1,0 +1,12 @@
+{
+  "name": "gaon-astra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A living 3D village with optional NCERT civics learning",
+  "scripts": {
+    "test": "node tests/smoke.cjs && node tests/integration.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

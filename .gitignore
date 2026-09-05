@@ -1,0 +1,10 @@
+# NCERT textbook sources: large and copyrighted, kept local only
+class 6.zip
+textbook/
+
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+node_modules/

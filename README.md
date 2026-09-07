@@ -12,7 +12,7 @@ No build step. Three.js is vendored locally; optional Google fonts fall back to 
 - Click the village to capture the mouse; move it to look. Escape releases it. Scroll changes camera distance.
 - E: use doors, talk, pump water, water saplings, load the truck, clear litter and greet animals.
 - J: open or close the field journal. Neighbour jobs lets you track a favour. Pause saves your village.
-- Touch: left side moves, right side looks; E and Jump buttons provide actions.
+- Touch: left side moves, right side looks; Use and Jump buttons provide actions. On phones, Menu pauses and saves the village and opens neighbour jobs, the journal, sound and village stats. Portrait and landscape layouts keep these tools off the play area.
 - Sound on/off controls the adapted Gaon Codex ambience, footsteps and cues.
 
 ## Your first village day
@@ -48,3 +48,7 @@ This is a new local Git repository. No GitHub remote or hosted deployment is con
 ## Browser checks
 
 With the local server running on port 8773, install the development dependency using `npm install`, then run `npm test`. Tests use an installed Microsoft Edge browser. `ASTRA_URL` can point at a different local server, and `PLAYWRIGHT_MODULE` can point at an existing Playwright installation. Screenshots are written to `qa/`.
+
+Run `npm run test:mobile` for touch emulation at 320×568, 360×640, 375×667, 390×844, 412×915, 667×375 and 844×390. It checks control bounds, prompt overlap, touch bucket filling, menu navigation, paused movement reset and access to elected resource stats.
+
+Spoken dialogue appears in named speech bubbles above villagers, including indoor conversations and favour thank-yous. Off-camera speakers retain a named bubble without a tail. `npm run test:speech` checks outdoor, indoor and reward speech, phone bounds, expiry and pause behavior.

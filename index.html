@@ -107,7 +107,7 @@ canvas#c{display:block;width:100vw;height:100vh}
 <div class="log" id="log"></div>
 <div class="stick" id="stick"><i id="knob"></i></div>
 <button class="jump" id="jumpBtn">Jump</button>
-<button class="act" id="act">E</button>
+<button class="act" id="act" aria-label="Use nearby object or talk">Use</button>
 <div class="fade" id="fade"></div>
 <div class="place hidden" id="place"></div>
 <div class="tip" id="tip">Click the village to look around · scroll to zoom · E to talk and use · Space to jump</div>
@@ -255,7 +255,13 @@ function talkLine(who){
   pool.push(...(byJob[who.job]||['Nights are getting cold.','My cousin in the city says they have a Nagar Palika.']));
   return pool[(S.day*7+(who.i||0)*3+S.night)%pool.length];
 }
-function talkTo(who,html){S.talking={who,line:talkLine(who),t:5.5};}
+function speak(who,line,anchor=null,keepReading=false){
+  closePrompt();
+  const t=Math.max(6,Math.min(18,line.split(/\s+/).length*.32+2));
+  S.talking={who,line,t,anchor,keepReading};
+  if(who.x!==undefined){who.wait=Math.max(who.wait||0,t);who.tx=who.x;who.ty=who.y;}
+}
+function talkTo(who){speak(who,talkLine(who));}
 
 // ---------- input ----------
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(S.paused)return;S.keys[k]=true;if(k==='e'||e.key==='Enter')act(true);if(e.key==='Escape')closePrompt();if(e.key===' ')e.preventDefault();});
@@ -268,13 +274,15 @@ const pitchMin=d=>0.1+0.8*clamp01((d-5)/50);
 function orbit(dx,dy){cam.yaw-=dx*0.0028;cam.pitch=Math.max(pitchMin(cam.dist),Math.min(1.3,cam.pitch+dy*0.0028));}
 const stick=document.getElementById('stick'),knob=document.getElementById('knob');let touch=null,stickV={x:0,y:0},look=null;
 const cvEl=document.getElementById('c');
-addEventListener('pointerdown',e=>{if(e.target&&e.target.closest&&e.target.closest('.overlay,.prompt,.act,.jump,button'))return;
+addEventListener('pointerdown',e=>{if(S.paused)return;if(e.target&&e.target.closest&&e.target.closest('.overlay,.prompt,.act,.jump,button'))return;
   if(e.pointerType==='mouse'){if(e.target===cvEl&&!S.paused&&document.pointerLockElement!==cvEl){cvEl.requestPointerLock();}return;}
   if(e.clientX<innerWidth/2){if(touch)return;touch={id:e.pointerId,x:e.clientX,y:e.clientY};stick.style.left=(e.clientX-55)+'px';stick.style.top=(e.clientY-55)+'px';stick.style.bottom='auto';}
   else{if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};}});
 addEventListener('pointermove',e=>{if(touch&&e.pointerId===touch.id){let dx=e.clientX-touch.x,dy=e.clientY-touch.y;const d=Math.hypot(dx,dy),m=40;if(d>m){dx*=m/d;dy*=m/d;}knob.style.left=(35+dx)+'px';knob.style.top=(35+dy)+'px';stickV={x:dx/m,y:dy/m};return;}
   if(look&&e.pointerId===look.id){orbit((e.clientX-look.x)*2.4,(e.clientY-look.y)*2.4);look.x=e.clientX;look.y=e.clientY;}});
-const endPointer=e=>{if(touch&&e.pointerId===touch.id){touch=null;stickV={x:0,y:0};knob.style.left='35px';knob.style.top='35px';}if(look&&e.pointerId===look.id)look=null;};
+function resetTouch(){touch=null;look=null;stickV={x:0,y:0};knob.style.left='35px';knob.style.top='35px';stick.style.left='';stick.style.top='';stick.style.bottom='';}
+const endPointer=e=>{if(touch&&e.pointerId===touch.id){const otherLook=look;resetTouch();look=otherLook;}if(look&&e.pointerId===look.id)look=null;};
+addEventListener('blur',resetTouch);addEventListener('resize',resetTouch);
 addEventListener('pointerup',endPointer);addEventListener('pointercancel',endPointer);
 addEventListener('mousemove',e=>{if(document.pointerLockElement===cvEl)orbit(e.movementX,e.movementY);});
 addEventListener('wheel',e=>{if(S.paused)return;cam.dist=Math.max(4,Math.min(60,cam.dist*(1+Math.sign(e.deltaY)*0.12)));cam.pitch=Math.max(pitchMin(cam.dist),cam.pitch);},{passive:true});
@@ -288,7 +296,7 @@ const promptEl=document.getElementById('prompt');let promptKey=null;
 function showPrompt(key,html){if(promptKey!==key){promptEl.innerHTML=html;promptEl.classList.remove('hidden');promptKey=key;}}
 function closePrompt(){promptEl.classList.add('hidden');promptKey=null;}
 const ov=document.getElementById('overlay');
-function screen(html,wide){closePrompt();if(document.pointerLockElement)document.exitPointerLock();ov.innerHTML=`<div class="card${wide?' wide':''}">${html}</div>`;ov.classList.remove('hidden');S.paused=true;S.keys={};acting=false;actEdge=false;}
+function screen(html,wide){resetTouch();closePrompt();if(document.pointerLockElement)document.exitPointerLock();ov.innerHTML=`<div class="card${wide?' wide':''}">${html}</div>`;ov.classList.remove('hidden');S.paused=true;S.keys={};acting=false;actEdge=false;}
 function closeScreen(){ov.classList.add('hidden');ov.innerHTML='';S.paused=false;last=performance.now();}
 function intro(){screen(`<span class="eyebrow">A LIVING CLASSROOM · NCERT CLASS 6</span><h1>Gaon Astra</h1><p class="intro-motto">A village to explore.<br>A democracy to understand.</p><p class="sub">Lakshmanpur, a village of fifteen people in the foothills, with a banyan at the chowk and a river to the east. You are one adult among its voters.</p>
 <p>Every morning you wake in your house and walk to the Panchayat Bhavan to collect the day's coins from the treasury chest and plan the land on the map table. Construction rises through the day and finishes at dusk. Be home by dark: nights bring thieves, rain, sickness and quarrels, and the Gram Sabha remembers how you handled them.</p>
@@ -578,11 +586,11 @@ function tick(dt){
     if(S.keys[' ']&&p.jy<=0){p.vy=5.4;}
     p.vy-=15*dt;p.jy=Math.max(0,p.jy+p.vy*dt);if(p.jy===0&&p.vy<0)p.vy=0;
     if(S.scene==='village'){p.x=Math.max(40,Math.min(W-40,p.x));p.y=Math.max(40,Math.min(H-40,p.y));collideVillage(p);}
-    if(S.talking){S.talking.t-=dt;const w=S.talking.who;const far=w.x!==undefined?Math.hypot(p.x-w.x,p.y-w.y)>34:false;if(S.talking.t<=0||far)S.talking=null;}
+    if(S.talking){S.talking.t-=dt;const w=S.talking.who;const far=S.scene==='village'&&!S.talking.keepReading&&w.x!==undefined?Math.hypot(p.x-w.x,p.y-w.y)>55:false;if(S.talking.t<=0||far)S.talking=null;}
   }
   if(!S.asleep&&!S.transition){
-    if(S.talking){const w=S.talking.who;showPrompt('say'+w.n+S.talking.line.length,`<h4>${w.n} <span class="tiny">(${w.job})</span></h4><p class="say">${S.talking.line}</p>`);}
-    else if(S.scene==='village'){const d=nearestDoor(p);const v=nearestVillager(p);
+    // Speech is presentation only: nearby actions stay available while it plays.
+    if(S.scene==='village'){const d=nearestDoor(p);const v=nearestVillager(p);
       if(window.VillageLife&&VillageLife.interact(p,actEdge)){}else if(v&&(!d||Math.hypot(p.x-v.x,p.y-v.y)<Math.hypot(p.x-d.x,p.y-(d.y+DOOR_OFF[d.id])))){showPrompt('v'+v.i,`<h4>${v.n} <span class="tiny">(${v.job})</span></h4><p>Say hello.</p><button id="hsb">Talk</button>`);const btn=document.getElementById('hsb');if(btn)btn.onclick=()=>startTalk(v);if(actEdge)startTalk(v);}
       else if(d){const html=doorHtml(d);showPrompt('door'+d.x+d.y+html.length,html);const btn=document.getElementById('hsb');if(btn)btn.onclick=()=>enterRoom(d);if(actEdge)enterRoom(d);}
       else if(window.astraNearby&&astraNearby(p,actEdge)){}else if(promptKey)closePrompt();}
@@ -821,7 +829,7 @@ function dayState(u){let i=0;while(i<DAYKEYS.length-2&&DAYKEYS[i+1].u<=u)i++;con
 let hudHtml='',camInit=false,lastNow=performance.now();
 function sync(){
   frameNo++;const now=performance.now(),rdt=Math.min(.05,(now-lastNow)/1000);lastNow=now;const animT=now/1000;
-  if(frameNo%10===1){const hb=document.getElementById('hud').getBoundingClientRect().bottom;if(hb!==hudBottom){hudBottom=hb;document.documentElement.style.setProperty('--hud',hb+'px');}}
+  if(frameNo%10===1){const hb=Math.max(document.getElementById('hud').getBoundingClientRect().bottom,document.getElementById('clock').getBoundingClientRect().bottom,matchMedia('(max-width:700px), (pointer:coarse) and (max-height:600px)').matches?(document.querySelector('.mission')?.getBoundingClientRect().bottom||0):0);if(hb!==hudBottom){hudBottom=hb;document.documentElement.style.setProperty('--hud',hb+'px');}}
   labels.style.visibility=(S.paused||S.scene==='interior')?'hidden':'';
   const p=S.player;
   // buildings
@@ -838,7 +846,7 @@ function sync(){
   // people, with name tags when close
   while(vil.length<S.villagers.length){const v=S.villagers[vil.length];const m=person(M.cloths[v.c||0]);scene.add(m);vil.push(m);}
   S.villagers.forEach((v,i)=>{const m=vil[i];animatePerson(m,animT+i,v.moving&&!S.paused);const gy=groundY(U(v.x),U(v.y));m.position.set(U(v.x),gy,U(v.y));if(v.face!==undefined)m.rotation.y=v.face;m.userData.body.rotation.z=0;m.visible=!(S.phase==='night'&&S.sabhaDone&&!v.moving);
-    if(m.visible&&S.scene==='village'&&Math.hypot(p.x-v.x,p.y-v.y)<55)place(label('n'+i,v.n,'name'),U(v.x),gy+1.9,U(v.y));});
+    if(m.visible&&S.talking?.who!==v&&S.scene==='village'&&Math.hypot(p.x-v.x,p.y-v.y)<55)place(label('n'+i,v.n,'name'),U(v.x),gy+1.9,U(v.y));});
   updateAstraWorld(S.paused?0:rdt);
   playerMesh.visible=!S.asleep;if(S.scene==='interior'){playerMesh.position.set(S.inside.x,p.jy,S.inside.z);playerMesh.rotation.y=S.inside.face;}else{playerMesh.position.set(U(p.x),groundY(U(p.x),U(p.y))+p.jy,U(p.y));playerMesh.rotation.y=p.face;}
   if(!playerMesh.userData.cornerRig)playerMesh.userData.body.material=M.cloth[[2,1,3][S.rank]||2];animatePerson(playerMesh,animT,p.moving&&!S.paused);playerMesh.userData.body.rotation.z=0;
@@ -945,7 +953,7 @@ function buildRoom(b){
     const kamla=person(M.cloths[5],.85);kamla.position.set(0,0,-4.9);g.add(kamla);
     const clerkWho={n:'Bansi Lal',job:'Panchayat secretary'};
     hot.push({key:'chest',x:-7.4,z:-4,r:2.3,html:()=>`<h4>Treasury chest</h4><p>${S.collected?'Empty until dawn. The night\'s income comes here.':S.treasury+' coins from the village, held for the Panchayat.'}</p>${S.collected?'':'<button id="hsb">Collect</button>'}`,act:()=>{if(S.rank<1){window.VillageLife?.locked();return;}if(!S.collected){S.coins+=S.treasury;log(`<b>Collected ${S.treasury} coins</b> from the Panchayat treasury.`);S.treasury=0;S.collected=true;}}});
-    hot.push({key:'clerk',x:-6.6,z:-2.4,r:1.6,html:()=>`<h4>${clerkWho.n} <span class="tiny">(${clerkWho.job})</span></h4><p>Keeps the minutes and the keys.</p><button id="hsb">Talk</button>`,act:()=>{S.talking={who:clerkWho,line:S.collected?'The map is on the table. Plan well; the Sabha reads the accounts.':'The chest holds '+S.treasury+' coins. Every rupee is written in this register.',t:5};}});
+    hot.push({key:'clerk',x:-6.6,z:-2.4,r:1.6,html:()=>`<h4>${clerkWho.n} <span class="tiny">(${clerkWho.job})</span></h4><p>Keeps the minutes and the keys.</p><button id="hsb">Talk</button>`,act:()=>{speak(clerkWho,S.collected?'The map is on the table. Plan well; the Sabha reads the accounts.':'The chest holds '+S.treasury+' coins. Every rupee is written in this register.',{x:-7.2,y:1.9,z:-3});}});
     hot.push({key:'table',x:0,z:-2,r:2.4,html:()=>S.phase==='day'?`<h4>The land map</h4><p>Lakshmanpur on paper. Plan today's work.</p><button id="hsb">Open the map</button>`:`<h4>The land map</h4><p>Too dark to plan. Wait for morning.</p>`,act:()=>{if(S.phase==='day')visitPanchayat();}});
     hot.push({key:'seat',x:0,z:3.4,r:1.9,html:()=>S.phase==='night'&&!S.sabhaDone?`<h4>Night Sabha</h4><p>The village is seated. Take your place.</p><button id="hsb">Take your seat</button>`:`<h4>The hall</h4><p>${S.phase==='night'?'The meeting is over. Lamps burn low.':'Benches for the Gram Sabha. Every adult has a seat.'}</p>`,act:()=>{if(S.phase==='night'&&!S.sabhaDone)nightSabha();}});
     hot.push({key:'board',x:W_/2-1.3,z:-1,r:1.9,html:()=>`<h4>Notice board</h4><p>${S.policies.length?'Resolutions in force: '+S.policies.map(id=>POLICIES.find(p=>p.id===id).n).join(', ')+'.':'No resolutions yet. The Sabha meets every third morning.'}</p>`});
@@ -967,7 +975,7 @@ function buildRoom(b){
   if(type==='homeS'){g.add(box(2.6,.5,1.1,RM.wood2,-1.5,.3,D_/2-2.2));g.add(box(2.5,.25,1,RM.cloth3,-1.5,.65,D_/2-2.2));solids.push(rect(-1.5,D_/2-2.2,1.3,.55));g.add(box(.7,.9,.06,RM.wood,-3,2.2,-D_/2+.1));g.add(box(.55,.75,.02,RM.paper,-3,2.2,-D_/2+.14));g.add(box(.6,.3,.35,RM.dark,W_/2-.45,1.75,-1.8));}
   let name='Your house';const resident=own?null:residentOf(b);
   if(resident){name=resident.n+"'s house";const rp=person(M.cloths[(Math.abs(b.x*7+b.y)%8)],.85);rp.position.set(.8,0,-.4);rp.rotation.y=Math.PI;g.add(rp);solids.push({x:.8,z:-.4,r:.6});
-    hot.push({key:'talk',x:.8,z:-.4,r:2.4,html:()=>`<h4>${resident.n} <span class="tiny">(${resident.job})</span></h4><p>At home.</p><button id="hsb">Talk</button>`,act:()=>{S.talking={who:resident,line:talkLine(resident),t:5.5};}});}
+    hot.push({key:'talk',x:.8,z:-.4,r:2.4,html:()=>`<h4>${resident.n} <span class="tiny">(${resident.job})</span></h4><p>At home.</p><button id="hsb">Talk</button>`,act:()=>{speak(resident,talkLine(resident),{x:.8,y:1.9,z:-.4});}});}
   else{hot.push({key:'bed',x:bx+.4,z:bz+1,r:2,html:()=>S.phase==='night'?(S.sabhaDone?`<h4>Your bed</h4><p>Sleep. The night passes; the village fends for itself.</p><button id="hsb">Sleep</button>`:`<h4>Your bed</h4><p>Not yet. The Sabha is waiting at the Panchayat.</p>`):`<h4>Your bed</h4><p>Not tired. The Panchayat is past the banyan.</p>`,act:()=>{if(S.phase==='night'&&S.sabhaDone)sleep(false);}});
     hot.push({key:'stove',x:sx,z:sz+1.3,r:1.6,html:()=>`<h4>Stove</h4><p>${S.grain>0?S.grain+' sacks of grain in the village store for tomorrow\'s rotis.':'The store is empty. People will go hungry at dawn.'}</p>`});}
   const room={scene:sc,W:W_,D:D_,solids,hotspots:hot,building:b,name};room.update=()=>{};
@@ -979,13 +987,13 @@ function movePlayerTo(sc){if(playerMesh.parent)playerMesh.parent.remove(playerMe
 function enterRoom(b){if(S.transition||S.scene!=='village')return;closePrompt();S.talking=null;fadeTo(()=>{const r=roomFor(b);S.scene='interior';S.room=r;S.inside={x:0,z:r.D/2-1.8,face:Math.PI};S.player.jy=0;S.player.vy=0;movePlayerTo(r.scene);S.player.moving=false;cam.savedDist=cam.dist;cam.savedPitch=cam.pitch;cam.dist=10;cam.pitch=.68;placeEl.textContent=r.name;placeEl.classList.remove('hidden');});}
 function leaveRoom(instant){if(S.scene!=='interior')return;const go=()=>{const b=S.room.building;S.scene='village';S.room=null;S.talking=null;S.player.x=b.x;S.player.y=b.y+DOOR_OFF[b.id]+6;S.player.face=0;S.player.jy=0;S.player.vy=0;movePlayerTo(scene);if(cam.savedDist)cam.dist=cam.savedDist;if(cam.savedPitch!==undefined)cam.pitch=cam.savedPitch;placeEl.classList.add('hidden');};closePrompt();if(instant)go();else fadeTo(go);}
 window.enterRoom=enterRoom;window.leaveRoom=leaveRoom;window.cam=cam;
-function draw(){sync();if(S.scene==='interior'){S.room.update();renderer.render(S.room.scene,camera);}else renderer.render(scene,camera);}
+function draw(){sync();updateSpeech();if(S.scene==='interior'){S.room.update();renderer.render(S.room.scene,camera);}else renderer.render(scene,camera);}
 function step(sec){const n=Math.round(sec*20);for(let i=0;i<n;i++){if(!S.paused)tick(0.05);}draw();}
 window.step=step;window.S=S;window.act=act;window.PLOTS=PLOTS;window.B=B;window.visitPanchayat=visitPanchayat;window.sleep=sleep;window.nightSabha=nightSabha;window.PANCH=PANCH;window.homeOf=()=>HOME;window.DOOR_OFF=DOOR_OFF;window.VC=VC;window.moveHome=moveHome;window.pitchMin=pitchMin;window.talkLine=talkLine;
 let last=performance.now();
 function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;if(!S.paused)tick(dt);draw();requestAnimationFrame(frame);}
 
 </script>
-<script src="audio.js"></script><script src="lessons.js"></script><script src="astra.js"></script><script src="world-art.js"></script><script src="village-life.js"></script>
+<script src="audio.js"></script><script src="lessons.js"></script><script src="astra.js"></script><script src="world-art.js"></script><script src="village-life.js"></script><script src="mobile-ui.js"></script><script src="speech-ui.js"></script>
 </body>
 </html>

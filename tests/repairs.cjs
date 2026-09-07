@@ -197,6 +197,21 @@ const fs = require("node:fs");
     assert.equal(await p.locator('[role="alert"]').count(), 1);
     assert.ok(await p.evaluate(() => GameRecovery.failed));
     await p.close();
+    const slow = await browser.newPage();
+    await slow.route("**/speech-ui.js*", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      await route.continue();
+    });
+    await slow.goto(process.env.ASTRA_URL || "http://127.0.0.1:8773");
+    await slow.locator("#beginVillage").click();
+    await slow.waitForTimeout(200);
+    assert.equal(
+      await slow.evaluate(() => GameRecovery.failed),
+      false,
+      "Delayed speech script must not race the first frame",
+    );
+    await slow.close();
+    evidence.delayedStartup = true;
     fs.mkdirSync("audits", { recursive: true });
     fs.writeFileSync(
       "audits/repair-results.json",

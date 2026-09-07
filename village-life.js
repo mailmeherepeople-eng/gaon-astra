@@ -950,6 +950,7 @@
     `<span class="eyebrow">GAON ASTRA · A VILLAGE THAT KNOWS YOU</span><h1>A small favour.<br>A new beginning.</h1><p>Welcome to Lakshmanpur. You are a villager, with neighbours to meet, animals to care for and a day to make your own.</p><p>Carry water. Clear a lane. Help a harvest reach the market. Earn your neighbours’ trust before standing for the Panchayat.</p><div class="village-example"><b>Make yourself at home</b><p>WASD / arrows to walk · Shift to run · Click, then move the mouse to look · Wheel to zoom · E to use things. On touchscreens, use the movement stick and action button.</p></div><button id="beginVillage">${saved ? "Continue your village" : "Step into Lakshmanpur"}</button>${saved ? '<button id="freshVillage" class="ghost">Start a new village</button>' : ""}<p class="source">The journal keeps the full civics explanations and optional practice. No quiz interrupts a favour.</p>`,
     true,
   );
+  document.getElementById("beginVillage").disabled = true;
   document.getElementById("beginVillage").onclick = () => {
     started = true;
     closeScreen();
@@ -975,5 +976,4 @@
         restart();
       };
     };
-  requestAnimationFrame(frame);
 })();

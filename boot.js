@@ -22,4 +22,25 @@
     event.preventDefault();
     report(new Error("Graphics context lost"));
   });
+  // Network gaps between classic script tags can yield to RAF. Start only after
+  // every extension has loaded, including speech and story hooks.
+  addEventListener(
+    "load",
+    () => {
+      if (shown || window.GameRecovery?.failed) return;
+      if (
+        typeof window.updateSpeech !== "function" ||
+        !window.VillageLife ||
+        !window.VillageStory ||
+        !window.GraphicsQuality
+      ) {
+        report(new Error("A game script did not load"));
+        return;
+      }
+      const begin = document.getElementById("beginVillage");
+      if (begin) begin.disabled = false;
+      requestAnimationFrame(frame);
+    },
+    { once: true },
+  );
 })();

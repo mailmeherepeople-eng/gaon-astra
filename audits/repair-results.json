@@ -41,7 +41,8 @@
     "level": 1
   },
   "carry": {
-    "before": 938,
-    "after": 938
-  }
+    "before": 933,
+    "after": 933
+  },
+  "delayedStartup": true
 }

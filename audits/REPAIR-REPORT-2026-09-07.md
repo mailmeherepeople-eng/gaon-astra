@@ -21,6 +21,7 @@ This report separates implemented changes from validation that needs real hardwa
 - Keep the latest validated snapshot in memory, so export can still work after a storage-write failure while the page remains open.
 - Added one-time runtime recovery: stop the failed simulation, clear held controls, show a readable alert and protect the last good save. A failing tick no longer repeats every frame.
 - Added `boot.js` for errors before initialization completes, rejected promises and graphics-context loss.
+- CI exposed a slow-network startup race: the animation loop could run between script downloads before speech initialized. Startup now waits for all scripts to load; a delayed-speech-download regression verifies this path.
 
 **Verified:** untouched-intro reload; loss/restart; ordinary job/election/construction reload; quota failure with truthful status and exportable state; dawn; controlled tick failure with one recovery alert. These are browser regressions, not a guarantee that local storage can never be lost.
 

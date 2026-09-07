@@ -302,6 +302,23 @@ const assert = require("node:assert/strict");
     await p.evaluate(() => nightSabha());
     await p.locator("#sabhaListen").click();
     await p.screenshot({ path: "qa/fixed-sabha-phone.png" });
+    await p.setViewportSize({ width: 667, height: 375 });
+    await p.locator("#sabhaListen").click();
+    await p.waitForFunction(() => {
+      const panel = document
+        .getElementById("sabhaPanel")
+        .getBoundingClientRect();
+      return ["speechBubble", "act", "jumpBtn"].every((id) => {
+        const r = document.getElementById(id).getBoundingClientRect();
+        return (
+          r.right <= panel.left ||
+          r.left >= panel.right ||
+          r.bottom <= panel.top ||
+          r.top >= panel.bottom
+        );
+      });
+    });
+    await p.screenshot({ path: "qa/fixed-sabha-landscape.png" });
     await p.locator("#sabhaVoteToggle").click();
     await p.locator("#sabhaPanel .vote").first().click();
     await p.locator("#sabhaCount").click();

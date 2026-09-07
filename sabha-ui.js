@@ -5,6 +5,14 @@
   panel.className = "sabha-panel hidden";
   panel.setAttribute("aria-label", "Night Sabha voting");
   document.body.appendChild(panel);
+  let speechReserve = 0;
+  const measure = () => {
+    if (panel.offsetHeight)
+      speechReserve =
+        panel.offsetHeight + parseFloat(getComputedStyle(panel).bottom) + 12;
+  };
+  new ResizeObserver(measure).observe(panel);
+  addEventListener("resize", measure);
   let day = 0,
     entries = [],
     next = 0,
@@ -44,6 +52,9 @@
     if (document.pointerLockElement) document.exitPointerLock();
   }
   window.VillageSabha = {
+    get speechReserve() {
+      return panel.classList.contains("hidden") ? 0 : speechReserve;
+    },
     element: panel,
     present,
     close,
@@ -77,6 +88,8 @@
       "hidden",
       dismissed || S.paused || S.asleep || elsewhere,
     );
+    if (promptKey?.startsWith("seat"))
+      promptEl.classList.toggle("hidden", !dismissed && !elsewhere);
     // A speaker's room coordinates must not follow the player outside the hall.
     if (elsewhere && S.talking === ownTalk) S.talking = null;
   });

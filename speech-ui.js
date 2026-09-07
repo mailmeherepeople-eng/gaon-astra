@@ -46,9 +46,16 @@ function updateSpeech() {
   speechBubble.classList.remove("hidden");
   const viewport = innerWidth + "x" + innerHeight;
   const margin = 12;
-  const reserve = matchMedia("(pointer:coarse)").matches ? 160 : 24;
-  speechBubble.style.maxHeight =
+  const reserve = Math.max(
+    matchMedia("(pointer:coarse)").matches ? 160 : 24,
+    window.VillageSabha?.speechReserve || 0,
+  );
+  const maxHeight =
     Math.max(70, innerHeight - (hudBottom + 24) - reserve) + "px";
+  if (speechBubble.style.maxHeight !== maxHeight) {
+    speechBubble.style.maxHeight = maxHeight;
+    speechSize = null;
+  }
   if (!speechSize || speechViewport !== viewport) {
     speechSize = speechBubble.getBoundingClientRect();
     speechViewport = viewport;

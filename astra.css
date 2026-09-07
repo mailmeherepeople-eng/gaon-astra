@@ -928,8 +928,8 @@ h3,
 @media (pointer: coarse) and (max-height: 500px) {
   .sabha-panel {
     right: 100px;
-    bottom: 130px;
-    max-height: 40dvh;
+    bottom: 12px;
+    max-height: calc(100dvh - 180px);
     width: min(350px, calc(100vw - 240px));
   }
 }

@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node tests/smoke.cjs && node tests/integration.cjs",
     "test:mobile": "node tests/mobile.cjs",
-    "test:speech": "node tests/speech.cjs"
+    "test:speech": "node tests/speech.cjs",
+    "test:performance": "node tests/performance.cjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

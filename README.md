@@ -8,6 +8,8 @@ From this directory run `python -m http.server 8773`, then open http://localhost
 
 No build step. Three.js is vendored locally; optional Google fonts fall back to installed fonts without internet.
 
+Phones automatically use lighter rendering and vegetation, with live shadows disabled for smoother play. See [PERFORMANCE.md](PERFORMANCE.md) for the measured workload reductions and graphics tradeoffs. Run `npm run test:performance` to check performance regressions.
+
 - WASD / arrows: move relative to the camera. Shift: run. Space: jump.
 - Click the village to capture the mouse; move it to look. Escape releases it. Scroll changes camera distance.
 - E: use doors, talk, pump water, water saplings, load the truck, clear litter and greet animals.

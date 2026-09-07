@@ -1,0 +1,4785 @@
+/* Simulation, input, world and rooms. Extensions register named lifecycle hooks. */
+const GameSystems = { world: [], beforeRender: [] };
+/* ============================================================
+   GAON 3D · third-person base builder · civics + economics, Class 6
+   Loop: wake at home, walk to the Panchayat Bhavan, collect the day's
+   coins from the chest, plan on the land map, watch construction rise
+   by day, be home and asleep by dark. Nights bring problems.
+   ============================================================ */
+if (!window.THREE) {
+  document.body.innerHTML =
+    '<div class="overlay"><div class="card"><h2>Three.js did not load</h2><p>This version needs an internet connection once for the 3D library.</p></div></div>';
+  throw new Error("no THREE");
+}
+const W = 2600,
+  H = 1900;
+const U = (x) => x / 10;
+const RIVER = { x: 2150, w: 130 };
+const BRIDGE_Y = 950;
+const VC = { x: 1250, y: 930 }; // the chowk under the banyan
+
+// ---------- content ----------
+const B = {
+  home: {
+    n: "Your house",
+    cost: 0,
+    sector: "H",
+    desc: "Where you sleep. Be inside by dark.",
+    rank: 0,
+  },
+  homeM: {
+    n: "Panchayat member's house",
+    cost: 0,
+    sector: "H",
+    desc: "Quarters for an elected member of the Gram Panchayat, by the south lane.",
+    rank: 0,
+  },
+  homeS: {
+    n: "Sarpanch's house",
+    cost: 0,
+    sector: "H",
+    desc: "The Sarpanch lives here: Kamla Devi, until the Sabha chooses someone else.",
+    rank: 0,
+  },
+  house: {
+    n: "House",
+    cost: 20,
+    sector: "H",
+    desc: "Two more villagers move in. People are workers and voters.",
+    rank: 0,
+  },
+  field: {
+    n: "Wheat field",
+    cost: 15,
+    sector: "P",
+    desc: "Primary sector: grain straight from nature. Needs one worker.",
+    rank: 0,
+  },
+  dairy: {
+    n: "Dairy shed",
+    cost: 25,
+    sector: "P",
+    desc: "Cows give milk. Milk spoils by evening unless it reaches a market or a dairy plant.",
+    rank: 0,
+  },
+  well: {
+    n: "Well and tank",
+    cost: 20,
+    sector: "C",
+    desc: "Water for people and fields. Softens drought and small floods.",
+    rank: 0,
+  },
+  forest: {
+    n: "Wood lot",
+    cost: 15,
+    sector: "P",
+    desc: "Primary sector: timber. Feeds the workshop.",
+    rank: 0,
+  },
+  mill: {
+    n: "Flour mill",
+    cost: 40,
+    sector: "S",
+    desc: "Secondary sector: grain becomes flour, worth double. Needs grain and a worker.",
+    rank: 1,
+  },
+  workshop: {
+    n: "Furniture workshop",
+    cost: 45,
+    sector: "S",
+    desc: "Wood bought at 600 becomes a chair sold at 1,000. The 400 is value added by skill and effort.",
+    rank: 1,
+  },
+  market: {
+    n: "Market",
+    cost: 35,
+    sector: "T",
+    desc: "Tertiary sector: goods sell at full price. Without it the middleman pays half.",
+    rank: 0,
+  },
+  road: {
+    n: "Village road",
+    cost: 10,
+    sector: "T",
+    desc: "Everyone walks faster; goods reach the market before they spoil.",
+    rank: 1,
+  },
+  school: {
+    n: "Primary school",
+    cost: 40,
+    sector: "T",
+    desc: "Teachers are a tertiary service. Children in school lift happiness, and the town needs it.",
+    rank: 1,
+  },
+  clinic: {
+    n: "Health sub-centre",
+    cost: 45,
+    sector: "T",
+    desc: "Public health is a State function delivered locally. Stops sickness at night.",
+    rank: 2,
+  },
+  bins: {
+    n: "Waste bins",
+    cost: 12,
+    sector: "C",
+    desc: "Plastic on the roadside stops piling up, if people also segregate their waste.",
+    rank: 1,
+  },
+  patwari: {
+    n: "Patwari's office",
+    cost: 30,
+    sector: "C",
+    desc: "The Patwari keeps land records and maps generations old. Settles boundary disputes before they turn into fights.",
+    rank: 1,
+  },
+  police: {
+    n: "Police post",
+    cost: 0,
+    sector: "C",
+    desc: "Police, law and order is a State matter. Only the Sarpanch can petition the State for a post. Once it stands, night thieves are caught.",
+    rank: 2,
+    petition: "State Government",
+    days: 2,
+  },
+  embank: {
+    n: "Embankment",
+    cost: 0,
+    sector: "C",
+    desc: "River flood protection, funded through the Panchayat Samiti at block level.",
+    rank: 2,
+    petition: "Panchayat Samiti",
+    days: 2,
+  },
+  panchayat: {
+    n: "Panchayat Bhavan",
+    cost: 0,
+    sector: "C",
+    desc: "Where you collect the day's coins, plan the land, and where the Gram Sabha votes.",
+    rank: 0,
+  },
+};
+const AGES = [
+  {
+    n: "Hamlet",
+    need: { pop: 0 },
+    unlock: "You are one voter among the adults of the Gram Sabha.",
+  },
+  {
+    n: "Gram Panchayat village",
+    need: { pop: 24, b: ["panchayat", "well"] },
+    unlock: "A village council is closest to the people. Public works open up.",
+  },
+  {
+    n: "Nagar Panchayat town",
+    need: { pop: 44, b: ["market", "school", "road"] },
+    unlock:
+      "Small towns get a Nagar Panchayat. Wards, property tax and city services come next.",
+  },
+  {
+    n: "Municipal Council city",
+    need: { pop: 60, b: ["clinic", "mill"] },
+    unlock:
+      "Between 1 and 10 lakh people a city has a Municipal Council (Nagar Palika). Prototype ends here.",
+  },
+];
+const RANKS = [
+  {
+    n: "Villager",
+    sub: "member of the Gram Sabha",
+    can: "Help your neighbours and earn their trust before standing for election.",
+  },
+  {
+    n: "Panchayat member",
+    sub: "elected by the Gram Sabha",
+    can: "Public works: roads, school, bins, mill, workshop and the Patwari's office. Vote on policies.",
+  },
+  {
+    n: "Sarpanch",
+    sub: "head of the Gram Panchayat",
+    can: "Petition the block and the State: police post, embankment, health sub-centre. Chair the Gram Sabha.",
+  },
+  {
+    n: "Panchayat Samiti member",
+    sub: "block level",
+    can: "Link villages, all-weather roads under PMGSY, coordinate plans for the district.",
+  },
+];
+const POLICIES = [
+  {
+    id: "coop",
+    n: "Dairy cooperative",
+    p: "Farmers sell milk as a group. The middleman is gone; milk fetches full price and never spoils on the way.",
+    src: "Ch 14, AMUL, pp. 202 to 205",
+    ok: (s) => s.count("dairy") > 0,
+  },
+  {
+    id: "rain",
+    n: "Rainwater harvesting",
+    p: "Hiware Bazar's method: tanks and watershed work. Drought and small floods do half the damage.",
+    src: "Ch 11, p. 166",
+  },
+  {
+    id: "women",
+    n: "Make meetings easier to attend",
+    p: "Arrange a meeting time and childcare so more neighbours can participate. Representation is a baseline right in this story, not a reward to unlock.",
+    src: "Ch 11, p. 169",
+  },
+  {
+    id: "bal",
+    n: "Bal Sabha",
+    p: "Children get a forum. They spot low wires, leaks and thieves first: you get a warning before each night's problem.",
+    src: "Ch 11, p. 167",
+  },
+  {
+    id: "segregate",
+    n: "Waste segregation drive",
+    p: "Citizens sort wet and dry waste at home. Bins actually work; plastic stops piling up.",
+    src: "Ch 12, p. 177",
+    ok: (s) => s.count("bins") > 0,
+  },
+  {
+    id: "langar",
+    n: "Community kitchen (seva)",
+    p: "Non-economic activity: villagers cook for everyone at festivals. No coins change hands, but happiness rises every day.",
+    src: "Ch 13, pp. 191 to 192",
+  },
+  {
+    id: "watch",
+    n: "Night watch",
+    p: "Neighbours take turns watching the fields. A community matter, not a government one. Thieves flee when the watch is up, but tired watchers lower happiness a little.",
+    src: "Ch 9, p. 145",
+  },
+  {
+    id: "midday",
+    n: "Mid-day meal kitchen",
+    p: "A kitchen in the school, as in Sangkhu Radhu Khandu Panchayat. More children attend; population grows faster.",
+    src: "Ch 11, p. 168",
+    ok: (s) => s.count("school") > 0,
+  },
+  {
+    id: "wage",
+    n: "Pay in kind",
+    p: "Part of a worker's wage is paid in mangoes and grain instead of cash. Coins last longer, but grain stocks drop.",
+    src: "Ch 13, p. 189",
+  },
+  {
+    id: "tax",
+    n: "Property tax",
+    p: "Urban local bodies collect local taxes to fund services. Steady coins each dawn, a little grumbling.",
+    src: "Ch 12, pp. 176, 178",
+    age: 2,
+  },
+];
+const NOTES = {
+  spoil:
+    "<b>Milk spoiled.</b> It curdles in the heat before reaching a market. The Anand farmers had the same problem before AMUL.",
+  middle:
+    "<b>The middleman</b> bought your goods at half price. No market, no choice. A cooperative or a market fixes this.",
+  value:
+    "<b>Value added.</b> Wood in at 600, chair out at 1,000: the 400 is skill, time and effort.",
+  thiefDay:
+    "<b>You caught him in daylight,</b> with half the village watching. Thieves learn: from now on they come at night, and only the police can catch them then.",
+  thiefNoPolice:
+    "<b>Too dark, too fast.</b> Catching thieves at night is police work, a State matter. A Sarpanch can petition for a post.",
+  thiefCaught:
+    "<b>The police post caught the thief.</b> The court will decide the rest.",
+  floodSmall:
+    "<b>Two lanes waterlogged.</b> Small enough for the village to handle: a well and tank drains it.",
+  floodBig:
+    "<b>The river is over the fields.</b> Bigger than one village. The State sends help, but an embankment through the block would have stopped it.",
+  election:
+    "<b>Gram Sabha.</b> Every adult votes. Your approval decides your rank.",
+  age1: "<b>Lakshmanpur is a Gram Panchayat village.</b> Members are elected by the Gram Sabha; the head is the Sarpanch.",
+  age2: "<b>Lakshmanpur is a town.</b> Towns below 1 lakh get a Nagar Panchayat. You will need wards, taxes and services.",
+  sick: "<b>Fever in three houses.</b> Public health is a State function; a health sub-centre stops it.",
+  plastic:
+    "<b>Plastic on the roadside.</b> Bins help, but only if people sort their waste.",
+  seva: "<b>Seva</b> at the community kitchen: no money changes hands, and the village is happier for it.",
+  dispute:
+    "<b>Two families are shouting over a field boundary.</b> Only the Patwari's records can say where the line runs.",
+  disputeOk:
+    "<b>The Patwari's old map settled it.</b> The stones go back where the record says.",
+  late: "<b>You slept in the field.</b> Cold, tired, and the village noticed.",
+  doze: "<b>Villagers must be indoors after the lamps go out.</b> You doze off. Watch the night.",
+  skipped:
+    "<b>The Sabha met without you.</b> Decisions were taken; nobody knew your view.",
+};
+// Everyone in Lakshmanpur has a name and a job. The first six speak at the night Sabha.
+const NAMES = [
+  { n: "Ramesh", job: "farmer" },
+  { n: "Meera Devi", job: "keeps cows" },
+  { n: "Bhagwati", job: "elder" },
+  { n: "Suraj", job: "young, wants work" },
+  { n: "Hari Singh", job: "shopkeeper" },
+  { n: "Anita", job: "student" },
+  { n: "Gopal", job: "potter" },
+  { n: "Sunita Devi", job: "anganwadi worker" },
+  { n: "Mohan", job: "carpenter" },
+  { n: "Radha", job: "weaver" },
+  { n: "Dinesh", job: "mason" },
+  { n: "Lakshmi", job: "midwife" },
+  { n: "Prakash", job: "teacher" },
+  { n: "Savitri", job: "farmer" },
+  { n: "Raju", job: "schoolboy" },
+  { n: "Geeta Devi", job: "runs the women's group" },
+  { n: "Bhola", job: "drives the tractor" },
+  { n: "Kishan", job: "herds goats" },
+  { n: "Pooja", job: "student" },
+  { n: "Naresh", job: "milkman" },
+];
+const VILLAGERS = NAMES.slice(0, 6);
+const NPC_SARPANCH = "Kamla Devi";
+
+// ---------- state ----------
+const S = {
+  day: 1,
+  t: 0,
+  phase: "day",
+  dayLen: 120,
+  nightLen: 80,
+  scene: "village",
+  room: null,
+  inside: { x: 0, z: 0, face: Math.PI },
+  transition: false,
+  talking: null,
+  homeId: "home",
+  res: {},
+  coins: 0,
+  treasury: 80,
+  grain: 8,
+  milk: 0,
+  wood: 0,
+  flour: 0,
+  chairs: 0,
+  pop: 15,
+  happy: 55,
+  approval: 40,
+  rank: 0,
+  age: 0,
+  policies: [],
+  petitions: [],
+  buildings: [],
+  problems: [],
+  villagers: [],
+  player: { x: 1250, y: 1140, face: 0, jy: 0, vy: 0 },
+  keys: {},
+  paused: true,
+  warned: [],
+  night: 0,
+  asleep: false,
+  collected: false,
+  dayThiefDone: false,
+  sabhaDone: true,
+  awake: 0,
+  reported: [],
+  subsidy: null,
+  resolution: null,
+  count(id) {
+    return this.buildings.filter((b) => b.id === id && !b.under).length;
+  },
+  has(id) {
+    return this.policies.includes(id);
+  },
+};
+const PLOTS = [
+  { x: 1250, y: 680, id: "panchayat", built: true },
+  { x: 1250, y: 1090, id: "home", built: true },
+  { x: 1580, y: 1270, id: "homeM", built: true },
+  { x: 920, y: 1270, id: "homeS", built: true },
+  { x: 1040, y: 860, id: "house", built: true },
+  { x: 1460, y: 860, id: "house", built: true },
+  { x: 990, y: 1080, id: "house", built: true },
+  { x: 1510, y: 1080, id: "house", built: true },
+  { x: 1250, y: 1300, id: "house", built: true },
+  { x: 820, y: 930, id: "house" },
+  { x: 1680, y: 930, id: "house" },
+  { x: 800, y: 1180, id: "house" },
+  { x: 1720, y: 1180, id: "house" },
+  { x: 1100, y: 1470, id: "house" },
+  { x: 1400, y: 1470, id: "house" },
+  { x: 620, y: 640, id: "field", built: true },
+  { x: 520, y: 860, id: "field", built: true },
+  { x: 560, y: 1080, id: "field" },
+  { x: 640, y: 1320, id: "field" },
+  { x: 2420, y: 760, id: "field" },
+  { x: 2440, y: 1160, id: "field" },
+  { x: 1900, y: 620, id: "field" },
+  { x: 1060, y: 700, id: "well" },
+  { x: 1720, y: 660, id: "dairy" },
+  { x: 1900, y: 1300, id: "dairy" },
+  { x: 420, y: 480, id: "forest" },
+  { x: 380, y: 1560, id: "forest" },
+  { x: 1250, y: 1660, id: "market" },
+  { x: 940, y: 1660, id: "mill" },
+  { x: 1560, y: 1660, id: "workshop" },
+  { x: 1760, y: 1470, id: "school" },
+  { x: 760, y: 1470, id: "clinic" },
+  { x: 1120, y: 1580, id: "bins" },
+  { x: 1380, y: 1580, id: "bins" },
+  { x: 760, y: 1720, id: "patwari" },
+  { x: 2380, y: 980, id: "police" },
+  { x: 2030, y: 950, id: "embank" },
+  { x: 1090, y: 990, id: "road" },
+];
+PLOTS.forEach((p) => {
+  if (p.built) S.buildings.push({ ...p, hp: 1 });
+});
+const START_BUILT = S.buildings.length;
+const PANCH = PLOTS[0];
+let HOME = S.buildings.find((b) => b.id === "home");
+const key = (b) => b.x + "," + b.y;
+// Residents: who lives in which house. The player's own house has none.
+{
+  let k = NAMES.length - 1;
+  PLOTS.filter((p) => p.id === "house").forEach((p) => {
+    S.res[key(p)] = NAMES[k--];
+  });
+  S.res[key(PLOTS[2])] = { n: "Devi Lal", job: "Panchayat member" };
+  S.res[key(PLOTS[3])] = { n: NPC_SARPANCH, job: "Sarpanch" };
+}
+function residentOf(b) {
+  let r = S.res[key(b)];
+  if (!r && b.id === "house") {
+    r =
+      NAMES[
+        (NAMES.length -
+          1 -
+          PLOTS.filter((p) => p.id === "house").findIndex(
+            (p) => p.x === b.x && p.y === b.y,
+          ) +
+          NAMES.length) %
+          NAMES.length
+      ];
+    S.res[key(b)] = r;
+  }
+  return r;
+}
+function moveHome(rank) {
+  const id = ["home", "homeM", "homeS"][rank];
+  const nb = S.buildings.find((b) => b.id === id);
+  if (!nb || nb === HOME) return;
+  const displaced = S.res[key(nb)];
+  S.res[key(nb)] = null;
+  S.res[key(HOME)] = displaced || NAMES[(S.day * 3) % NAMES.length];
+  HOME = nb;
+  S.homeId = id;
+  if (window.ROOMS) {
+    ROOMS.delete(nb);
+  }
+}
+const FIELDS = () => S.buildings.filter((b) => b.id === "field" && !b.under);
+function rnd(a, b) {
+  return a + Math.random() * (b - a);
+}
+function spawnVillagers() {
+  const core = [
+    { n: NPC_SARPANCH, job: "Sarpanch" },
+    ...["Naresh", "Meera Devi", "Hari Singh", "Prakash"].map((n) =>
+      NAMES.find((v) => v.n === n),
+    ),
+    ...Object.values(S.res).filter(Boolean),
+    ...NAMES,
+  ];
+  const identities = [...new Map(core.map((v) => [v.n, v])).values()];
+  S.villagers.length = Math.min(S.villagers.length, S.pop);
+  while (S.villagers.length < S.pop) {
+    const i = S.villagers.length;
+    const who = identities[i % identities.length];
+    S.villagers.push({
+      x: VC.x + rnd(-90, 90),
+      y: VC.y + rnd(-40, 80),
+      tx: VC.x,
+      ty: VC.y,
+      wait: rnd(0, 3),
+      c: Math.floor(Math.random() * 8),
+      s: rnd(0.88, 1.06),
+      n: who.n,
+      job: who.job,
+      i,
+    });
+  }
+}
+spawnVillagers();
+const logEl = document.getElementById("log");
+function log(html) {
+  const d = document.createElement("div");
+  d.innerHTML = html;
+  logEl.appendChild(d);
+  while (logEl.children.length > 3) logEl.firstChild.remove();
+  setTimeout(() => d.remove(), 8200);
+}
+// What a villager says when you press E. Proposals first, then what hurts the village, then their trade.
+function talkLine(who) {
+  const P = proposals();
+  const pr = P.find((p) => p.by === who.n);
+  if (pr && S.phase === "night") return pr.why;
+  const pool = [];
+  if (S.problems.some((p) => p.k === "sick"))
+    pool.push(
+      "Fever in the houses near the well. Someone should send for the doctor.",
+    );
+  if (S.problems.some((p) => p.k === "flood"))
+    pool.push(
+      "The river is up again. An embankment needs the block office, not us.",
+    );
+  if (S.problems.some((p) => p.k === "thief"))
+    pool.push(
+      "A stranger was seen by the fields. Keep your grain inside tonight.",
+    );
+  if (!S.count("market"))
+    pool.push(
+      "The middleman came again. Half price for our grain, and what choice do we have?",
+    );
+  if (!S.count("school"))
+    pool.push(
+      "The children walk to the next village for school. Two hours each way.",
+    );
+  if (!S.count("well"))
+    pool.push(
+      "The tank is dry by noon. A proper well would change everything.",
+    );
+  if (S.has("coop"))
+    pool.push(
+      "Since the cooperative, the milk fetches full price. Meera Devi is smiling for once.",
+    );
+  if (S.has("women"))
+    pool.push("The new meeting time makes it easier for Geeta Devi to attend.");
+  if (S.grain <= 2)
+    pool.push("The store is nearly empty. People will go hungry at dawn.");
+  const byJob = {
+    farmer: [
+      "The wheat is thin this year.",
+      "One tractor for the whole village, that is what we need.",
+    ],
+    "keeps cows": [
+      "Milk spoils by evening unless it reaches the market.",
+      "My cows know me better than my children do.",
+    ],
+    elder: [
+      "In my day the Sabha met under the banyan. Still does, in a way.",
+      "Every adult has a vote. Use it.",
+    ],
+    shopkeeper: [
+      "A market of our own, and nobody pays the middleman.",
+      "Property tax? In a village? Wait till we are a town.",
+    ],
+    student: [
+      "I want to be the District Collector.",
+      "The school needs a wall. Goats keep coming in.",
+    ],
+    schoolboy: [
+      "Raju is not my full name. It is Rajesh Kumar, but nobody says it.",
+      "I can run to the bridge and back before you finish that sentence.",
+    ],
+    teacher: [
+      "Mid-day meals bring the children in. Hungry children cannot learn.",
+      "Chapter eleven. Gram Panchayat, Panchayat Samiti, Zila Parishad. Say it back.",
+    ],
+    potter: [
+      "Clay from the pond, sun from the sky, and my hands. Primary sector, the teacher says.",
+      "A pot sells for ten. The clay cost nothing. Think about that.",
+    ],
+    carpenter: [
+      "Wood in at 600, a chair out at 1,000. The rest is my hands.",
+      "Give me a workshop and I will give you furniture for the whole block.",
+    ],
+    midwife: [
+      "A health sub-centre is a State matter, but fever does not wait for the State.",
+      "Three births this year. All at home, all at night.",
+    ],
+    mason: [
+      "Every house here I built or my father did.",
+      "Bricks from the kiln across the river. The bridge saves me an hour a day.",
+    ],
+    weaver: [
+      "The market pays double what the middleman does. I have counted.",
+      "My loom is older than the Panchayat.",
+    ],
+    "anganwadi worker": [
+      "The children are weighed every month. The State pays for that much.",
+      "Segregate your waste, I keep telling them. Wet in one, dry in the other.",
+    ],
+    "young, wants work": [
+      "No mill, no workshop, no work. I may go to the city.",
+      "Give me a job and I will vote for you twice. Once is legal.",
+    ],
+    "runs the women's group": [
+      "One-third of the seats are ours by law. We would like them in practice.",
+      "The self-help group lends at two percent. The moneylender wants ten.",
+    ],
+    "drives the tractor": [
+      "The lane sinks every monsoon. A pucca road, that is what I want.",
+      "Diesel is dearer every year.",
+    ],
+    "herds goats": [
+      "The goats got into the school yard again.",
+      "Nobody counts goats in the census. I do.",
+    ],
+    milkman: [
+      "Six houses on my round. Without a cooperative the milk is worth half.",
+      "The bridge is the best thing the Panchayat ever built.",
+    ],
+  };
+  pool.push(
+    ...(byJob[who.job] || [
+      "Nights are getting cold.",
+      "My cousin in the city says they have a Nagar Palika.",
+    ]),
+  );
+  return pool[(S.day * 7 + (who.i || 0) * 3 + S.night) % pool.length];
+}
+function speak(who, line, anchor = null, keepReading = false) {
+  closePrompt();
+  const t = Math.max(6, Math.min(18, line.split(/\s+/).length * 0.32 + 2));
+  S.talking = { who, line, t, anchor, keepReading };
+  if (typeof book !== "undefined") {
+    book.journal.push({ day: S.day, text: who.n + ": " + line });
+    book.journal = book.journal.slice(-80);
+    saveBook();
+  }
+  if (who.x !== undefined) {
+    who.wait = Math.max(who.wait || 0, t);
+    who.tx = who.x;
+    who.ty = who.y;
+  }
+}
+function talkTo(who) {
+  speak(who, talkLine(who));
+}
+
+// ---------- input ----------
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (S.paused || e.ctrlKey || e.metaKey) return;
+  S.keys[k] = true;
+  if (k === "e" || e.key === "Enter") act(true);
+  if (e.key === "Escape") closePrompt();
+  if (e.key === " ") e.preventDefault();
+});
+addEventListener("keyup", (e) => {
+  const k = e.key.toLowerCase();
+  S.keys[k] = false;
+  if (k === "e" || e.key === "Enter") act(false);
+});
+addEventListener("blur", () => {
+  S.keys = {};
+});
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+// Third-person orbit camera: yaw and pitch from the mouse or the right half of a touch screen, distance from the wheel.
+const cam = { yaw: 0, pitch: 0.34, dist: 9, savedDist: 0 };
+const pitchMin = (d) => 0.1 + 0.8 * clamp01((d - 5) / 50);
+function orbit(dx, dy) {
+  cam.yaw -= dx * 0.0028;
+  cam.pitch = Math.max(
+    pitchMin(cam.dist),
+    Math.min(1.3, cam.pitch + dy * 0.0028),
+  );
+}
+const stick = document.getElementById("stick"),
+  knob = document.getElementById("knob");
+let touch = null,
+  stickV = { x: 0, y: 0 },
+  look = null;
+const cvEl = document.getElementById("c");
+addEventListener("pointerdown", (e) => {
+  if (S.paused) return;
+  if (
+    e.target &&
+    e.target.closest &&
+    e.target.closest(".overlay,.prompt,.speech-bubble,.act,.jump,button")
+  )
+    return;
+  if (e.pointerType === "mouse") {
+    if (
+      e.target === cvEl &&
+      !S.paused &&
+      document.pointerLockElement !== cvEl
+    ) {
+      cvEl.requestPointerLock();
+    }
+    return;
+  }
+  if (e.clientX < innerWidth / 2) {
+    if (touch) return;
+    touch = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    stick.style.left = e.clientX - 55 + "px";
+    stick.style.top = e.clientY - 55 + "px";
+    stick.style.bottom = "auto";
+  } else {
+    if (look) return;
+    look = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  }
+});
+addEventListener("pointermove", (e) => {
+  if (touch && e.pointerId === touch.id) {
+    let dx = e.clientX - touch.x,
+      dy = e.clientY - touch.y;
+    const d = Math.hypot(dx, dy),
+      m = 40;
+    if (d > m) {
+      dx *= m / d;
+      dy *= m / d;
+    }
+    knob.style.left = 35 + dx + "px";
+    knob.style.top = 35 + dy + "px";
+    stickV = { x: dx / m, y: dy / m };
+    return;
+  }
+  if (look && e.pointerId === look.id) {
+    orbit((e.clientX - look.x) * 2.4, (e.clientY - look.y) * 2.4);
+    look.x = e.clientX;
+    look.y = e.clientY;
+  }
+});
+function resetTouch() {
+  touch = null;
+  look = null;
+  stickV = { x: 0, y: 0 };
+  knob.style.left = "35px";
+  knob.style.top = "35px";
+  stick.style.left = "";
+  stick.style.top = "";
+  stick.style.bottom = "";
+}
+const endPointer = (e) => {
+  if (touch && e.pointerId === touch.id) {
+    const otherLook = look;
+    resetTouch();
+    look = otherLook;
+  }
+  if (look && e.pointerId === look.id) look = null;
+};
+addEventListener("blur", resetTouch);
+addEventListener("resize", resetTouch);
+addEventListener("pointerup", endPointer);
+addEventListener("pointercancel", (e) => {
+  endPointer(e);
+  acting = false;
+  actEdge = false;
+  S.keys = {};
+});
+addEventListener("blur", () => {
+  acting = false;
+  actEdge = false;
+  S.keys = {};
+});
+document.addEventListener("visibilitychange", () => {
+  resetTouch();
+  acting = false;
+  actEdge = false;
+  S.keys = {};
+});
+addEventListener("mousemove", (e) => {
+  if (document.pointerLockElement === cvEl) orbit(e.movementX, e.movementY);
+});
+addEventListener(
+  "wheel",
+  (e) => {
+    if (S.paused || e.ctrlKey) return;
+    cam.dist = Math.max(
+      4,
+      Math.min(60, cam.dist * (1 + Math.sign(e.deltaY) * 0.12)),
+    );
+    cam.pitch = Math.max(pitchMin(cam.dist), cam.pitch);
+  },
+  { passive: true },
+);
+document.addEventListener("pointerlockchange", () => {
+  const t = document.getElementById("tip");
+  if (document.pointerLockElement === cvEl) t.style.opacity = 0;
+});
+const actBtn = document.getElementById("act");
+actBtn.addEventListener("pointerdown", () => act(true));
+actBtn.addEventListener("pointerup", () => act(false));
+actBtn.addEventListener("pointerleave", () => act(false));
+const jumpBtn = document.getElementById("jumpBtn");
+jumpBtn.addEventListener("pointerdown", () => {
+  S.keys[" "] = true;
+});
+jumpBtn.addEventListener("pointerup", () => {
+  S.keys[" "] = false;
+});
+jumpBtn.addEventListener("pointerleave", () => {
+  S.keys[" "] = false;
+});
+let acting = false,
+  actEdge = false;
+function act(on) {
+  if (on && !acting) actEdge = true;
+  acting = on;
+}
+
+// ---------- prompt / screens ----------
+const promptEl = document.getElementById("prompt");
+let promptKey = null;
+function showPrompt(key, html) {
+  if (promptKey !== key) {
+    promptEl.innerHTML = html;
+    promptEl.classList.remove("hidden");
+    promptKey = key;
+  }
+}
+function closePrompt() {
+  promptEl.classList.add("hidden");
+  promptKey = null;
+}
+const ov = document.getElementById("overlay");
+let screenCleanup = null;
+function cleanScreen() {
+  if (screenCleanup) {
+    screenCleanup();
+    screenCleanup = null;
+  }
+}
+function screen(html, wide) {
+  cleanScreen();
+  resetTouch();
+  closePrompt();
+  if (document.pointerLockElement) document.exitPointerLock();
+  ov.innerHTML = `<div class="card${wide ? " wide" : ""}">${html}</div>`;
+  ov.classList.remove("hidden");
+  S.paused = true;
+  S.keys = {};
+  acting = false;
+  actEdge = false;
+}
+function closeScreen() {
+  cleanScreen();
+  ov.classList.add("hidden");
+  ov.innerHTML = "";
+  S.paused = false;
+  last = performance.now();
+}
+// ---------- economy at dawn (coins go to the Panchayat treasury) ----------
+function dawn() {
+  S.problems = [];
+  S.collected = false;
+  S.asleep = false;
+  document.getElementById("sleep").classList.add("hidden");
+  if (S.scene === "interior") leaveRoom(true);
+  S.player.x = HOME.x;
+  S.player.y = HOME.y + DOOR_OFF[HOME.id] + 10;
+  S.player.face = Math.PI;
+  const workers = Math.max(0, S.pop - 2);
+  let jobs = 0,
+    report = [];
+  const use = (n) => {
+    if (jobs + n <= workers) {
+      jobs += n;
+      return true;
+    }
+    return false;
+  };
+  let grain = 0,
+    milk = 0,
+    wood = 0;
+  S.buildings.forEach((b) => {
+    if (b.hp < 1 || b.under) return;
+    if (b.id === "field" && use(1)) grain += S.count("well") ? 6 : 5;
+    if (b.id === "dairy" && use(1)) milk += 3;
+    if (b.id === "forest" && use(1)) wood += 2;
+  });
+  if (S.has("rain") && S.count("well")) grain += 1;
+  S.grain += grain;
+  S.milk += milk;
+  S.wood += wood;
+  let flour = 0,
+    chairs = 0;
+  S.buildings.forEach((b) => {
+    if (b.hp < 1 || b.under) return;
+    if (b.id === "mill" && use(1)) {
+      const g = Math.min(4, S.grain);
+      S.grain -= g;
+      flour += g;
+    }
+    if (b.id === "workshop" && use(1)) {
+      const w = Math.min(2, S.wood);
+      S.wood -= w;
+      chairs += w;
+    }
+  });
+  S.flour += flour;
+  S.chairs += chairs;
+  if (chairs && !S.warned.includes("value")) {
+    S.warned.push("value");
+    log(NOTES.value);
+  }
+  const eat = Math.ceil(S.pop / 4);
+  if (S.grain >= eat) {
+    S.grain -= eat;
+  } else {
+    S.happy -= 6;
+    report.push("Not enough grain: people went hungry");
+    S.grain = 0;
+  }
+  const market = S.count("market") > 0;
+  const road = S.count("road") > 0;
+  let income = 0;
+  const price = { grain: 4, flour: 8, wood: 4, chairs: 12, milk: 4 };
+  const sell = (k, amt) => {
+    const full = amt * price[k];
+    if (market) {
+      income += full;
+    } else {
+      income += Math.floor(full / 2);
+    }
+  };
+  if (S.milk) {
+    if (market || S.has("coop") || road) {
+      if (S.has("coop")) income += S.milk * price.milk;
+      else sell("milk", S.milk);
+    } else {
+      log(NOTES.spoil);
+    }
+    S.milk = 0;
+  }
+  const surplusGrain = Math.max(0, S.grain - 4);
+  if (surplusGrain) {
+    sell("grain", surplusGrain);
+    S.grain -= surplusGrain;
+  }
+  if (S.flour) {
+    sell("flour", S.flour);
+    S.flour = 0;
+  }
+  if (S.chairs) {
+    sell("chairs", S.chairs);
+    S.chairs = 0;
+  }
+  if (S.wood > 4) {
+    sell("wood", S.wood - 4);
+    S.wood = 4;
+  }
+  if (!market && income > 0 && !S.warned.includes("middle")) {
+    S.warned.push("middle");
+    log(NOTES.middle);
+  }
+  if (S.has("tax")) {
+    income += S.pop;
+    S.happy -= 1;
+  }
+  if (S.has("wage")) {
+    income += Math.floor(jobs / 2);
+    S.grain = Math.max(0, S.grain - 1);
+  }
+  income += 8;
+  S.treasury += income;
+  let h = 0;
+  if (S.count("school")) h += 2;
+  if (S.count("clinic")) h += 1;
+  if (S.count("well")) h += 1;
+  if (S.has("langar")) {
+    h += 2;
+    if (S.day % 2 === 0) log(NOTES.seva);
+  }
+  if (S.has("women")) h += 1;
+  if (S.has("watch")) h -= 1;
+  if (workers - jobs > 8) h -= 1;
+  S.happy = Math.max(0, Math.min(100, S.happy + h));
+  if (S.happy >= 40) {
+    const growth =
+      (S.count("house") > 0 ? 2 : 1) +
+      (S.has("midday") && S.count("school") ? 1 : 0) +
+      (S.happy >= 70 ? 1 : 0);
+    const cap = 8 + S.count("house") * 8 + (S.age >= 2 ? 10 : 0);
+    S.pop = Math.min(cap, S.pop + growth);
+  }
+  spawnVillagers();
+  S.approval = Math.round(
+    S.happy * 0.6 + Math.min(40, (S.buildings.length - START_BUILT) * 4),
+  );
+  S.petitions.forEach((p) => {
+    p.days--;
+    if (p.days <= 0) {
+      const plot = PLOTS.find((x) => x.id === p.id);
+      S.buildings.push({ ...plot, hp: 1, under: true, start: S.day });
+      log(
+        `<b>${B[p.id].n} sanctioned</b> by the ${B[p.id].petition}. Work starts today.`,
+      );
+    }
+  });
+  S.petitions = S.petitions.filter((p) => p.days > 0);
+  S.buildings.forEach((b) => {
+    if (b.hp < 1) b.hp = Math.min(1, b.hp + 0.5);
+  });
+  if (S.reported.length) {
+    S.buildings.forEach((b) => {
+      b.hp = 1;
+    });
+    S.happy += Math.min(3, S.reported.length);
+    log(
+      `<b>Because you reported ${S.reported.length} problem${S.reported.length > 1 ? "s" : ""} last night,</b> the Panchayat had them seen to by dawn.`,
+    );
+    S.reported = [];
+  }
+  if (S.subsidy) {
+    log(
+      `<b>Resolution in force:</b> the treasury pays half of the ${B[S.subsidy].n.toLowerCase()} today.`,
+    );
+  }
+  checkAge();
+  log(
+    `<b>Dawn, day ${S.day}.</b> ${income} coins from ${jobs} workers went to the Panchayat treasury${report.length ? ". " + report.join(". ") : ""}.`,
+  );
+}
+function checkAge() {
+  const nx = AGES[S.age + 1];
+  if (!nx) return;
+  if (
+    S.pop >= nx.need.pop &&
+    (nx.need.b || []).every((id) => S.count(id) > 0)
+  ) {
+    S.age++;
+    log(S.age === 1 ? NOTES.age1 : NOTES.age2);
+    screen(
+      `<h2>${AGES[S.age].n}</h2><p>${AGES[S.age].unlock}</p><button id="ok">Continue</button>`,
+    );
+    document.getElementById("ok").onclick = closeScreen;
+  }
+}
+
+// ---------- dusk: construction completes ----------
+function dusk() {
+  let n = 0;
+  S.buildings.forEach((b) => {
+    if (b.under) {
+      b.under = false;
+      n++;
+    }
+  });
+  if (n)
+    log(
+      `<b>${n} construction${n > 1 ? "s" : ""} finished</b> as the light went.`,
+    );
+  nightfall();
+  S.sabhaDone = false;
+  S.reported = [];
+  S.awake = S.nightLen * [0.25, 0.6, 1, 1][S.rank];
+  S.villagers.forEach((v) => {
+    v.tx = PANCH.x + rnd(-70, 70);
+    v.ty = PANCH.y + rnd(50, 110);
+    v.wait = 999;
+  });
+  log(
+    "<b>Lamps at the Panchayat Bhavan.</b> The village is gathering for the night Sabha.",
+  );
+}
+// ---------- the night Sabha ----------
+function proposals() {
+  const P = [];
+  const has = (k) => S.problems.some((p) => p.k === k);
+  if (has("thief"))
+    P.push({
+      id: "watch",
+      n: "Set a night watch on the fields",
+      why: "Ramesh saw a stranger. Neighbours take turns tonight; a community matter.",
+      by: "Ramesh",
+      base: 3,
+      lead: 2,
+    });
+  if (has("flood"))
+    P.push({
+      id: "drain",
+      n: "Dig a drain from the lower lane tonight",
+      why: "The river is rising. Twenty people with spades before the water reaches the houses.",
+      by: "Bhagwati",
+      base: 3,
+      lead: 1,
+    });
+  if (has("plastic"))
+    P.push({
+      id: "cleanup",
+      n: "Clean-up drive at first light",
+      why: "Plastic by the temple road. Goats are eating it.",
+      by: "Anita",
+      base: 2,
+      lead: 1,
+    });
+  if (has("sick"))
+    P.push({
+      id: "doctor",
+      n: "Send for the doctor from the block",
+      why: "Fever in three houses near the well. The health sub-centre is a State function; until then, send a message.",
+      by: "Meera Devi",
+      base: 3,
+      lead: 2,
+    });
+  if (has("dispute"))
+    P.push({
+      id: "patwari",
+      n: "Call the Patwari with the old map",
+      why: "Two families are shouting at the field edge. Only the land record can settle it.",
+      by: "Hari Singh",
+      base: 2,
+      lead: 1,
+    });
+  const want = ["school", "market", "well", "road", "clinic"].filter(
+    (id) => !S.buildings.some((b) => b.id === id) && S.rank >= B[id].rank,
+  );
+  want.slice(0, 2).forEach((id) =>
+    P.push({
+      id: "fund:" + id,
+      n: `Spend treasury on the ${B[id].n.toLowerCase()}`,
+      why: {
+        school: "Suraj: the children walk two hours to the next village.",
+        market: "Hari Singh: the middleman pays half. A market of our own.",
+        well: "Meera Devi: the tank is dry by noon.",
+        road: "Ramesh: the tractor sinks every monsoon.",
+        clinic: "Bhagwati: the fever comes back every year.",
+      }[id],
+      by: {
+        school: "Suraj",
+        market: "Hari Singh",
+        well: "Meera Devi",
+        road: "Ramesh",
+        clinic: "Bhagwati",
+      }[id],
+      base: 2,
+      lead: id === "road" ? 3 : 1,
+    }),
+  );
+  if (P.length < 2)
+    P.push({
+      id: "nothing",
+      n: "No new resolution; keep the treasury",
+      why: `${NPC_SARPANCH}: a quiet village should save.`,
+      by: NPC_SARPANCH,
+      base: 1,
+      lead: 3,
+    });
+  return P.slice(0, 4);
+}
+function nightSabha() {
+  const P = proposals();
+  let voted = null;
+  const filler = [
+    "The wheat is thin this year.",
+    "Nights are getting cold.",
+    "My cousin in the city says they have a Nagar Palika.",
+    "I want the meeting to end so I can sleep.",
+    "The goats got into the school yard again.",
+    "Someone should fix the lane by the well.",
+  ].sort(() => Math.random() - 0.5);
+  const talk = VILLAGERS.slice(0, S.pop > 10 ? 5 : 4)
+    .map((v) => {
+      const pr = P.find((p) => p.by === v.n);
+      return `<li class="talk"><b>${v.n}</b> <span class="tiny">(${v.job})</span><br>${pr ? pr.why : filler.pop()}</li>`;
+    })
+    .join("");
+  const votesHtml = () =>
+    P.map(
+      (p, i) =>
+        `<button class="pol vote${voted === i ? " on" : ""}" data-i="${i}"><h3>${p.n}</h3><p>${p.why}</p><span class="src">raised by ${p.by}</span></button>`,
+    ).join("");
+  screen(
+    `<h2>Night Sabha, day ${S.day}</h2><p class="sub">Lamps lit. ${S.rank >= 2 ? "You chair the meeting." : NPC_SARPANCH + " chairs; you have " + "one vote, like every adult" + "."}</p>
+  <p><b>The village speaks.</b></p><ul class="talkers">${talk}</ul>
+  <p><b>Proposals.</b> ${S.rank >= 2 ? "Hear the vote, then decide." : "Cast your vote."}</p><div class="policies" id="props">${votesHtml()}</div><button id="count" class="hidden">Count the votes</button>`,
+    true,
+  );
+  ov.querySelectorAll(".vote").forEach(
+    (b) =>
+      (b.onclick = () => {
+        voted = +b.dataset.i;
+        ov.querySelectorAll(".vote").forEach((x) =>
+          x.classList.toggle("on", +x.dataset.i === voted),
+        );
+        document.getElementById("count").classList.remove("hidden");
+      }),
+  );
+  document.getElementById("count").onclick = () => {
+    const tally = P.map((p) => p.base + Math.floor(Math.random() * 4));
+    tally[voted] += 1;
+    const maj = tally.indexOf(Math.max(...tally));
+    let html = `<h2>The count</h2><div class="stats">${P.map((p, i) => `<span>${p.n}${i === voted ? " (your vote)" : ""}</span><span>${tally[i]}</span>`).join("")}</div><p><b>Majority:</b> ${P[maj].n}.</p>`;
+    if (S.rank >= 2) {
+      html += `<p>This is a simplified story decision, not a statement of a Sarpanch’s legal powers. Consider the discussion and explain the choice.</p><div class="policies">${P.map((p, i) => `<button class="pol dec" data-i="${i}"><h3>${p.n}</h3><p>${i === maj ? "Follow the majority." : "Overrule the majority. Approval falls a little, unless it turns out right."}</p></button>`).join("")}</div>`;
+      screen(html, true);
+      ov.querySelectorAll(".dec").forEach(
+        (b) => (b.onclick = () => decide(P, +b.dataset.i, maj, true)),
+      );
+    } else {
+      const follow = Math.random() < 0.7;
+      const pick = follow
+        ? maj
+        : P.map((p, i) => i).sort((a, b) => P[b].lead - P[a].lead)[0];
+      html += `<p><b>${NPC_SARPANCH} decides:</b> ${P[pick].n}. ${pick === maj ? "The majority carried it." : "The Sarpanch had other ideas. In this simplified game the chair can choose another proposal; real Panchayats must follow applicable rules and remain accountable to the Gram Sabha."}</p><button id="ok">Leave the meeting</button>`;
+      screen(html, true);
+      document.getElementById("ok").onclick = () => decide(P, pick, maj, false);
+    }
+  };
+}
+function applyResolution(id) {
+  const mark = (k) =>
+    S.problems.forEach((p) => {
+      if (p.k === k) p.mit = true;
+    });
+  if (id === "watch") {
+    mark("thief");
+    S.problems.forEach((p) => {
+      if (p.k === "thief") p.flee = true;
+    });
+  }
+  if (id === "drain") {
+    mark("flood");
+  }
+  if (id === "cleanup") {
+    S.problems = S.problems.filter((p) => p.k !== "plastic");
+    S.happy += 1;
+  }
+  if (id === "doctor") {
+    S.problems = S.problems.filter((p) => p.k !== "sick");
+    S.happy += 1;
+  }
+  if (id === "patwari") {
+    S.problems = S.problems.filter((p) => p.k !== "dispute");
+    S.happy += 1;
+  }
+  if (id.startsWith("fund:")) {
+    S.subsidy = id.slice(5);
+  }
+}
+function decide(P, pick, maj, mine) {
+  const p = P[pick];
+  S.resolution = p.id;
+  applyResolution(p.id);
+  if (mine && pick !== maj) S.happy -= 2;
+  if (mine && pick === maj) S.happy += 1;
+  log(`<b>Resolution:</b> ${p.n}.`);
+  S.sabhaDone = true;
+  closeScreen();
+  S.villagers.forEach((v) => {
+    v.wait = 0;
+  });
+  if (S.rank >= 2)
+    log(
+      "<b>The night is yours.</b> Walk with the lantern, or go home and sleep.",
+    );
+  else
+    log(
+      `<b>Lamps out soon.</b> You may walk with the lantern for ${Math.round(S.awake)} seconds, then villagers must be indoors.`,
+    );
+}
+function sabhaWithoutYou() {
+  const P = proposals();
+  const pick = P.map((p, i) => i).sort((a, b) => P[b].lead - P[a].lead)[0];
+  applyResolution(P[pick].id);
+  S.sabhaDone = true;
+  S.happy -= 2;
+  log(NOTES.skipped + " " + P[pick].n + ".");
+}
+
+// ---------- Panchayat visit: collect, Sabha, plan ----------
+function visitPanchayat() {
+  if (S.rank < 1) {
+    window.VillageLife?.election();
+    return;
+  }
+  if (!S.collected) {
+    S.coins += S.treasury;
+    log(`<b>Collected ${S.treasury} coins</b> from the Panchayat treasury.`);
+    S.treasury = 0;
+    S.collected = true;
+  }
+  if (S.day % 3 === 1 && S.day > 1 && S.lastElection !== S.day) {
+    S.lastElection = S.day;
+    election(() => openPlan());
+  } else openPlan();
+}
+function election(after) {
+  if (S.rank < 1) {
+    window.VillageLife?.election();
+    return;
+  }
+  log(NOTES.election);
+  const need = S.rank === 0 ? 50 : 55;
+  const won = S.approval >= need;
+  let html = `<h2>Gram Sabha, morning of day ${S.day}</h2><p class="sub">Every adult enrolled as a voter has a say.</p><div class="stats"><span>Approval</span><span>${S.approval}%</span><span>Needed</span><span>${need}%</span><span>Happiness</span><span>${S.happy}</span><span>Population</span><span>${S.pop}</span></div>`;
+  const ageNeed = [0, 0, 1, 2];
+  if (won && S.rank < RANKS.length - 1 && S.age >= ageNeed[S.rank + 1]) {
+    S.rank++;
+    html += `<p><b>Elected: ${RANKS[S.rank].n}</b>, ${RANKS[S.rank].sub}. ${RANKS[S.rank].can}</p>`;
+    if (S.rank === 1) {
+      moveHome(1);
+      html += `<p><b>You move into the Panchayat member's house</b> by the south lane. Devi Lal takes your old one.</p>`;
+      log(
+        "<b>New house.</b> The Panchayat member's house, by the south lane, is yours.",
+      );
+    }
+    if (S.rank === 2) {
+      moveHome(2);
+      html += `<p><b>Kamla Devi hands you the keys</b> to the Sarpanch's house at the west end of the village.</p>`;
+      log("<b>New house.</b> The Sarpanch's house at the west end is yours.");
+    }
+  } else if (won && S.rank < RANKS.length - 1) {
+    html += `<p>Re-elected as ${RANKS[S.rank].n}. The next rank, ${RANKS[S.rank + 1].n}, needs Lakshmanpur to become a ${AGES[ageNeed[S.rank + 1]].n} first.</p>`;
+  } else if (won) {
+    html += `<p>Re-elected as ${RANKS[S.rank].n}.</p>`;
+  } else {
+    html += `<p>Not elected this time. Feed people, build a school, keep the nights quiet, and try again in three days.</p>`;
+  }
+  const choices = POLICIES.filter(
+    (p) => !S.has(p.id) && (!p.ok || p.ok(S)) && (!p.age || S.age >= p.age),
+  )
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3);
+  if (S.rank >= 1 && choices.length) {
+    html += `<p style="margin-top:12px"><b>The Sabha passes one resolution.</b> Pick a policy:</p><div class="policies">${choices.map((p) => `<button class="pol" data-p="${p.id}"><h3>${p.n}</h3><p>${p.p}</p><span class="src">${p.src}</span></button>`).join("")}</div>`;
+  } else html += `<button id="ok">To the land map</button>`;
+  screen(html);
+  ov.querySelectorAll(".pol").forEach(
+    (b) =>
+      (b.onclick = () => {
+        if (S.has(b.dataset.p)) return;
+        S.policies.push(b.dataset.p);
+        log(
+          `<b>Resolution passed:</b> ${POLICIES.find((p) => p.id === b.dataset.p).n}.`,
+        );
+        after();
+      }),
+  );
+  const ok = document.getElementById("ok");
+  if (ok) ok.onclick = after;
+}
+// Paths: every finished building links to the nearest already-linked one, starting from the Bhavan, the chowk and the house.
+function pathLinks() {
+  const done = S.buildings.filter(
+    (b) => !b.under && !["road", "embank"].includes(b.id) && b.x < RIVER.x,
+  );
+  const chowk = { x: VC.x, y: VC.y, id: "chowk" };
+  const linked = [chowk],
+    links = [];
+  done
+    .filter((b) => b.id === "panchayat" || b.id === "home")
+    .forEach((b) => {
+      links.push([chowk, b]);
+      linked.push(b);
+    });
+  const rest = done
+    .filter((b) => !linked.includes(b))
+    .sort(
+      (a, b) =>
+        Math.hypot(a.x - VC.x, a.y - VC.y) - Math.hypot(b.x - VC.x, b.y - VC.y),
+    );
+  rest.forEach((b) => {
+    let best = null,
+      bd = 1e9;
+    linked.forEach((l) => {
+      const d = Math.hypot(l.x - b.x, l.y - b.y);
+      if (d < bd) {
+        bd = d;
+        best = l;
+      }
+    });
+    if (best) links.push([best, b]);
+    linked.push(b);
+  });
+  return links;
+}
+let planSel = null;
+const MAPB = { x0: 300, x1: 2550, y0: 380, y1: 1830 };
+const FOOT = {
+  home: 2.6,
+  homeM: 3.4,
+  homeS: 3.7,
+  house: 2.6,
+  field: 3.2,
+  dairy: 3,
+  well: 1.8,
+  forest: 2.6,
+  mill: 2.6,
+  workshop: 2.8,
+  market: 3.3,
+  road: 1.6,
+  school: 3,
+  clinic: 2.8,
+  bins: 1.1,
+  patwari: 2.3,
+  police: 2.6,
+  embank: 1,
+  panchayat: 3.9,
+};
+function openPlan() {
+  if (S.rank < 1) {
+    window.VillageLife?.locked();
+    return;
+  }
+  screen(
+    `<h2>The land of Lakshmanpur</h2><p class="sub">Tap a plot to plan it. Work starts when you walk out and finishes at dusk. Public works budget: <b id="planCoins">${S.coins}</b></p>
+  <label for="plotSelect">Choose a named plot</label><select id="plotSelect"><option value="">Select a project</option></select><div class="plan"><div class="map"><canvas id="mapc"></canvas></div><div class="side"><h3 id="sideT">Pick a plot</h3><p class="desc" id="sideD">The Bhavan is north of the banyan chowk, your house south of it. Fields lie west, the river and the bridge east. Faint circles are plots your rank cannot open yet.</p><p class="cost" id="sideC"></p><button id="sideB" class="hidden">Plan it</button><ul class="queue" id="queue"></ul><p class="hint">Rank: ${RANKS[S.rank].n}. ${RANKS[S.rank].can}</p></div></div>
+  <button id="leave" class="ghost" style="margin-top:12px">Walk out</button>`,
+    true,
+  );
+  planSel = null;
+  const plotSelect = document.getElementById("plotSelect");
+  function refreshPlots() {
+    plotSelect.innerHTML =
+      '<option value="">Select a project</option>' +
+      PLOTS.map((pl, i) =>
+        S.buildings.some((b) => b.x === pl.x && b.y === pl.y)
+          ? ""
+          : `<option value="${i}">${B[pl.id].n} · ${B[pl.id].cost} coins · plot ${i + 1}${S.rank < B[pl.id].rank ? " · locked" : ""}</option>`,
+      ).join("");
+  }
+  refreshPlots();
+  plotSelect.onchange = () => {
+    planSel = plotSelect.value === "" ? null : PLOTS[+plotSelect.value];
+    drawMap();
+    side();
+  };
+  const mc = document.getElementById("mapc"),
+    mctx = mc.getContext("2d");
+  mc.setAttribute(
+    "aria-label",
+    "Village planning map. Use the named plot selector for keyboard selection.",
+  );
+  const MW = MAPB.x1 - MAPB.x0,
+    MH = MAPB.y1 - MAPB.y0;
+  let k = 1,
+    cw = 0,
+    ch = 0;
+  function fit() {
+    const r = mc.getBoundingClientRect();
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    cw = r.width;
+    ch = r.height;
+    mc.width = Math.round(cw * dpr);
+    mc.height = Math.round(ch * dpr);
+    mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    k = cw / MW;
+  }
+  const mx = (x) => (x - MAPB.x0) * k,
+    my = (y) => (y - MAPB.y0) * k;
+  const SEC = {
+    P: "#c9b04e",
+    S: "#8e8e9a",
+    T: "#e7a25a",
+    C: "#7fa7c9",
+    H: "#d9b98a",
+  };
+  function drawMap() {
+    fit();
+    const big = k >= 0.28;
+    const c = mctx;
+    c.fillStyle = "#d3e2bc";
+    c.fillRect(0, 0, cw, ch);
+    c.fillStyle = "rgba(255,255,255,.12)";
+    for (let i = 0; i < 12; i++) {
+      c.beginPath();
+      c.ellipse(
+        mx(400 + i * 190),
+        my(500 + (i % 3) * 420),
+        110 * k,
+        70 * k,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      c.fill();
+    }
+    c.fillStyle = "rgba(190,170,120,.3)";
+    c.beginPath();
+    c.ellipse(mx(VC.x), my(VC.y + 60), 420 * k, 330 * k, 0, 0, Math.PI * 2);
+    c.fill();
+    // pond, banyan, temple
+    c.fillStyle = "#8fb3d6";
+    c.beginPath();
+    c.ellipse(mx(1250), my(1480), 75 * k, 55 * k, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#4d8a46";
+    c.beginPath();
+    c.arc(mx(VC.x), my(VC.y - 30), 42 * k, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#f28c28";
+    c.beginPath();
+    c.moveTo(mx(1480) - 8 * k, my(700) + 10 * k);
+    c.lineTo(mx(1480), my(700) - 14 * k);
+    c.lineTo(mx(1480) + 8 * k, my(700) + 10 * k);
+    c.fill();
+    // river with banks and the bridge
+    c.fillStyle = "#d9cfa8";
+    c.fillRect(mx(RIVER.x - 35), 0, (RIVER.w + 70) * k, ch);
+    c.fillStyle = "#8fb3d6";
+    c.fillRect(mx(RIVER.x), 0, RIVER.w * k, ch);
+    c.strokeStyle = "rgba(255,255,255,.35)";
+    c.lineWidth = 1;
+    for (let i = 0; i < 10; i++) {
+      c.beginPath();
+      c.moveTo(mx(RIVER.x + 25 + (i % 3) * 35), my(420 + i * 140));
+      c.lineTo(mx(RIVER.x + 25 + (i % 3) * 35), my(470 + i * 140));
+      c.stroke();
+    }
+    c.fillStyle = "#8a6a48";
+    c.fillRect(
+      mx(RIVER.x - 40),
+      my(BRIDGE_Y) - 3 * k - 2,
+      (RIVER.w + 80) * k,
+      6 * k + 4,
+    );
+    // lanes
+    c.strokeStyle = "rgba(150,125,80,.55)";
+    c.lineWidth = Math.max(2, 5 * k);
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(mx(VC.x), my(VC.y));
+    c.lineTo(mx(RIVER.x - 40), my(BRIDGE_Y));
+    c.stroke();
+    pathLinks().forEach(([a, b]) => {
+      c.beginPath();
+      c.moveTo(mx(a.x), my(a.y));
+      c.lineTo(mx(b.x), my(b.y));
+      c.stroke();
+    });
+    if (S.buildings.some((b) => b.id === "road" && !b.under)) {
+      c.strokeStyle = "#bfa77e";
+      c.lineWidth = Math.max(4, 10 * k);
+      c.beginPath();
+      c.moveTo(mx(850), my(930));
+      c.lineTo(mx(1250), my(990));
+      c.lineTo(mx(1250), my(1640));
+      c.moveTo(mx(1250), my(990));
+      c.lineTo(mx(1650), my(930));
+      c.stroke();
+    }
+    const label = (t, x, y, col, f) => {
+      c.font = f || '11px "IBM Plex Sans",sans-serif';
+      c.textAlign = "center";
+      c.lineWidth = 3;
+      c.strokeStyle = "rgba(222,232,200,.85)";
+      c.lineJoin = "round";
+      c.strokeText(t, x, y);
+      c.fillStyle = col;
+      c.fillText(t, x, y);
+    };
+    PLOTS.forEach((pl) => {
+      const b = S.buildings.find((x) => x.x === pl.x && x.y === pl.y);
+      const d = B[pl.id];
+      const x = mx(pl.x),
+        y = my(pl.y);
+      const locked = S.rank < d.rank;
+      const pend = S.petitions.some((q) => q.id === pl.id);
+      const sel = planSel === pl;
+      if (pl.id === "embank") {
+        const ex = mx(RIVER.x - 70);
+        c.fillStyle = b
+          ? "#8a7a5a"
+          : sel
+            ? "rgba(200,85,46,.6)"
+            : locked
+              ? "rgba(29,42,34,.12)"
+              : "rgba(29,42,34,.3)";
+        c.fillRect(ex - 3, my(560), 6, my(1400) - my(560));
+        if (!b && !locked)
+          label(
+            pend ? "petition pending" : "Embankment",
+            ex,
+            my(545),
+            "#1d2a22",
+          );
+        return;
+      }
+      const s = Math.max(8, FOOT[pl.id] * 6 * k);
+      if (b) {
+        c.fillStyle = "rgba(0,0,0,.12)";
+        c.fillRect(x - s + 2, y - s * 0.7 + 2, s * 2, s * 1.4);
+        c.fillStyle = b.under ? "#e0a63c" : SEC[d.sector];
+        c.fillRect(x - s, y - s * 0.7, s * 2, s * 1.4);
+        if (
+          !["field", "forest", "bins", "well", "market", "road"].includes(b.id)
+        ) {
+          c.fillStyle =
+            b === HOME
+              ? "#a04e37"
+              : b.id === "panchayat"
+                ? "#e0a63c"
+                : b.id === "school"
+                  ? "#4a7fb5"
+                  : b.id === "homeS"
+                    ? "#3e7a4a"
+                    : "#8a5a3a";
+          c.beginPath();
+          c.moveTo(x - s - 2, y - s * 0.7);
+          c.lineTo(x, y - s * 1.5);
+          c.lineTo(x + s + 2, y - s * 0.7);
+          c.fill();
+        }
+        if (b.id === "field" || b.id === "forest") {
+          c.strokeStyle = "rgba(0,0,0,.15)";
+          c.lineWidth = 1;
+          for (let i = 1; i < 4; i++) {
+            c.beginPath();
+            c.moveTo(x - s, y - s * 0.7 + i * s * 0.35);
+            c.lineTo(x + s, y - s * 0.7 + i * s * 0.35);
+            c.stroke();
+          }
+        }
+        const nm =
+          b === HOME
+            ? "Your house"
+            : b.id === "house" || b.id === "homeM" || b.id === "homeS"
+              ? residentOf(b)
+                ? residentOf(b).n.split(" ")[0]
+                : d.n
+              : d.n;
+        if (big || b.id === "panchayat" || b === HOME)
+          label(b.under ? "building…" : nm, x, y + s + 11, "#1d2a22");
+        return;
+      }
+      const r = Math.max(9, FOOT[pl.id] * 4.2 * k);
+      c.beginPath();
+      c.arc(x, y, r, 0, Math.PI * 2);
+      if (locked) {
+        c.setLineDash([2, 3]);
+        c.strokeStyle = "rgba(29,42,34,.22)";
+        c.lineWidth = 1;
+        c.stroke();
+        c.setLineDash([]);
+        return;
+      }
+      c.fillStyle = sel ? "rgba(200,85,46,.35)" : "rgba(244,239,227,.7)";
+      c.fill();
+      c.setLineDash(pend ? [4, 3] : []);
+      c.strokeStyle = pend ? "#e0a63c" : sel ? "#c8552e" : "#1d2a22";
+      c.lineWidth = sel ? 3 : 1.5;
+      c.stroke();
+      c.setLineDash([]);
+      if (!pend && !d.petition)
+        label(
+          S.subsidy === pl.id ? Math.ceil(d.cost / 2) : d.cost,
+          x,
+          y + 4,
+          "#1d2a22",
+          '600 11px "IBM Plex Mono",monospace',
+        );
+      if (big || sel)
+        label(
+          pend ? "petition pending" : d.n,
+          x,
+          y + r + 12,
+          pend ? "#8a6a12" : "#1d2a22",
+        );
+    });
+  }
+  function side() {
+    const el = (id) => document.getElementById(id);
+    if (!planSel) {
+      el("sideB").classList.add("hidden");
+      return;
+    }
+    const d = B[planSel.id];
+    const locked = S.rank < d.rank;
+    el("sideT").textContent = d.n;
+    el("sideD").textContent = d.desc;
+    const b = el("sideB");
+    if (locked) {
+      el("sideC").textContent = "Needs the rank of " + RANKS[d.rank].n;
+      b.classList.add("hidden");
+    } else if (d.petition) {
+      const pend = S.petitions.some((q) => q.id === planSel.id);
+      el("sideC").textContent = pend
+        ? "Petition pending"
+        : "Petition the " + d.petition + ", arrives in " + d.days + " days";
+      b.textContent = "Send petition";
+      b.classList.toggle("hidden", pend);
+    } else {
+      const c = S.subsidy === planSel.id ? Math.ceil(d.cost / 2) : d.cost;
+      el("sideC").textContent =
+        c +
+        " coins" +
+        (S.subsidy === planSel.id ? " (Sabha pays half)" : "") +
+        (S.coins < c ? " (not enough)" : "");
+      b.textContent = "Plan it";
+      b.classList.toggle("hidden", S.coins < c);
+    }
+  }
+  function queue() {
+    document.getElementById("queue").innerHTML =
+      S.buildings
+        .filter((b) => b.under)
+        .map((b) => `<li><span>${B[b.id].n}</span><b>today</b></li>`)
+        .join("") +
+      S.petitions
+        .map((p) => `<li><span>${B[p.id].n}</span><b>${p.days}d</b></li>`)
+        .join("");
+  }
+  mc.addEventListener("pointerdown", (e) => {
+    const r = mc.getBoundingClientRect();
+    const x = (e.clientX - r.left) / k + MAPB.x0,
+      y = (e.clientY - r.top) / k + MAPB.y0;
+    let best = null,
+      bd = 80;
+    PLOTS.forEach((pl) => {
+      if (S.buildings.some((b) => b.x === pl.x && b.y === pl.y)) return;
+      const px = pl.id === "embank" ? RIVER.x - 70 : pl.x,
+        py = pl.id === "embank" ? 980 : pl.y;
+      const d =
+        pl.id === "embank"
+          ? Math.abs(px - x) + (y > 1400 || y < 560 ? 999 : 0)
+          : Math.hypot(px - x, py - y);
+      if (d < bd) {
+        bd = d;
+        best = pl;
+      }
+    });
+    planSel = best;
+    drawMap();
+    side();
+  });
+  document.getElementById("sideB").onclick = () => {
+    if (!planSel || S.rank < 1) return;
+    const d = B[planSel.id];
+    if (S.rank < d.rank) return;
+    if (d.petition) {
+      S.petitions.push({ id: planSel.id, days: d.days });
+      log(`<b>Petition sent</b> to the ${d.petition}.`);
+    } else {
+      const c = S.subsidy === planSel.id ? Math.ceil(d.cost / 2) : d.cost;
+      if (S.coins >= c) {
+        S.coins -= c;
+        if (S.subsidy === planSel.id) S.subsidy = null;
+        S.buildings.push({ ...planSel, hp: 1, under: true, start: S.day });
+      }
+    }
+    planSel = null;
+    refreshPlots();
+    document.getElementById("planCoins").textContent = S.coins;
+    drawMap();
+    side();
+    queue();
+  };
+  document.getElementById("leave").onclick = () => {
+    closeScreen();
+    const n = S.buildings.filter((b) => b.under).length;
+    log(
+      n
+        ? `<b>${n} site${n > 1 ? "s" : ""} under construction.</b> Walk past and watch; it finishes at dusk.`
+        : "<b>Nothing planned today.</b> Unspent public funds stay in the works budget.",
+    );
+  };
+  window.planApi = {
+    drawMap,
+    side,
+    queue,
+    select: (pl) => {
+      planSel = pl;
+      drawMap();
+      side();
+    },
+  };
+  const ro = new ResizeObserver(() => {
+    if (mc.isConnected) drawMap();
+  });
+  ro.observe(mc);
+  screenCleanup = () => {
+    ro.disconnect();
+    window.planApi = null;
+  };
+  drawMap();
+  side();
+  queue();
+}
+
+// ---------- nights ----------
+function nightfall() {
+  S.night++;
+  const n = S.night;
+  S.problems = [];
+  const warn = S.has("bal");
+  const add = (p) => {
+    S.problems.push(p);
+    if (warn) log(`<b>The children report:</b> ${p.warn}`);
+  };
+  if (n % 3 === 1 && S.dayThiefDone)
+    add({
+      k: "thief",
+      x: 150,
+      y: 700,
+      warn: "a stranger near the fields.",
+      t: 0,
+    });
+  if (n === 2 || n % 4 === 2)
+    add({
+      k: "flood",
+      x: RIVER.x - 70,
+      y: rnd(600, 1300),
+      r: 0,
+      warn: "the river is rising.",
+      t: 0,
+      big: false,
+    });
+  if (n === 3 || n % 4 === 3)
+    add({
+      k: "plastic",
+      x: VC.x + rnd(-160, 160),
+      y: 1010,
+      warn: "plastic piling by the road.",
+      t: 0,
+    });
+  if (n >= 4 && n % 3 === 0)
+    add({
+      k: "sick",
+      x: 1040,
+      y: 900,
+      warn: "fever in the houses near the well.",
+      t: 0,
+    });
+  if (n >= 3 && n % 4 === 0 && FIELDS().length >= 2) {
+    const f = FIELDS();
+    add({
+      k: "dispute",
+      x: f[0].x + 30,
+      y: f[0].y + 30,
+      warn: "two families arguing at the field edge.",
+      t: 0,
+    });
+  }
+  if (n >= 5 && n % 2 === 1 && S.dayThiefDone)
+    add({
+      k: "thief",
+      x: 300,
+      y: 1650,
+      warn: "another stranger, south side.",
+      t: 0,
+    });
+}
+function updateProblems(dt) {
+  const night = S.phase === "night";
+  for (const p of S.problems) {
+    p.t += dt;
+    if (p.k === "thief") {
+      if (!p.target) {
+        const f = FIELDS().filter((b) => b.hp >= 1 && b.x < RIVER.x);
+        p.target = f.length ? f[Math.floor(Math.random() * f.length)] : null;
+        if (!p.target) {
+          p.done = true;
+          continue;
+        }
+      }
+      if (night && S.has("watch")) p.flee = true;
+      if (night && S.count("police") && !p.met && p.t > 3) {
+        p.met = true;
+        log(NOTES.thiefCaught);
+        S.happy += 2;
+        p.done = true;
+        continue;
+      }
+      if (p.flee) {
+        const dx = p.x - VC.x,
+          dy = p.y - VC.y,
+          d = Math.hypot(dx, dy) || 1;
+        p.x += (dx / d) * 150 * dt;
+        p.y += (dy / d) * 150 * dt;
+        if (p.x < 0 || p.x > W || p.y < 0 || p.y > H) p.done = true;
+        continue;
+      }
+      const dx = p.target.x - p.x,
+        dy = p.target.y - p.y,
+        d = Math.hypot(dx, dy);
+      if (d > 8) {
+        p.x += (dx / d) * (p.day ? 55 : 70) * dt;
+        p.y += (dy / d) * (p.day ? 55 : 70) * dt;
+      } else {
+        p.steal = (p.steal || 0) + dt;
+        if (p.steal > 4) {
+          S.grain = Math.max(0, S.grain - 3);
+          S.treasury = Math.max(0, S.treasury - 8);
+          S.happy -= 4;
+          log("<b>Grain stolen from the field.</b>");
+          p.flee = true;
+        }
+      }
+      const pd = Math.hypot(S.player.x - p.x, S.player.y - p.y);
+      if (pd < 26 && !p.met && !S.asleep && S.scene === "village") {
+        p.met = true;
+        if (p.day) {
+          log(NOTES.thiefDay);
+          S.dayThiefDone = true;
+          S.happy += 3;
+          p.done = true;
+        } else {
+          log(NOTES.thiefNoPolice);
+          p.flee = true;
+        }
+      }
+    }
+    if (p.k === "flood") {
+      const rate =
+        (S.has("rain") ? 8 : 16) *
+        (S.count("embank") ? 0 : 1) *
+        (p.mit ? 0.5 : 1);
+      p.r += rate * dt;
+      if (p.r > 60 && !p.big && p.t > 8) {
+        p.big = true;
+        log(NOTES.floodBig);
+        S.happy -= 3;
+      }
+      if (!p.big && p.t > 1.5 && !p.said) {
+        p.said = true;
+        log(NOTES.floodSmall);
+      }
+      if (S.count("well") && !p.big) {
+        p.r -= 14 * dt;
+        if (p.r <= 0) {
+          p.done = true;
+          continue;
+        }
+      }
+      S.buildings.forEach((b) => {
+        if (
+          b.hp >= 1 &&
+          !b.under &&
+          Math.hypot(b.x - p.x, b.y - p.y) < p.r + 20
+        ) {
+          b.hp = 0.4;
+          log(`<b>${B[b.id].n} damaged</b> by the flood.`);
+        }
+      });
+      if (p.t > 16) p.done = true;
+    }
+    if (p.k === "plastic") {
+      if (!p.said) {
+        p.said = true;
+        log(NOTES.plastic);
+      }
+      if (S.count("bins") && S.has("segregate")) {
+        p.done = true;
+        S.happy += 1;
+      } else if (p.t > 10) {
+        S.happy -= 3;
+        p.done = true;
+      }
+    }
+    if (p.k === "sick") {
+      if (!p.said) {
+        p.said = true;
+        log(NOTES.sick);
+      }
+      if (S.count("clinic")) {
+        p.done = true;
+        S.happy += 1;
+      } else if (p.t > 10) {
+        S.pop = Math.max(3, S.pop - 1);
+        S.happy -= 4;
+        p.done = true;
+      }
+    }
+    if (p.k === "dispute") {
+      if (!p.said) {
+        p.said = true;
+        log(NOTES.dispute);
+      }
+      if (S.count("patwari")) {
+        if (p.t > 3) {
+          p.done = true;
+          S.happy += 2;
+          log(NOTES.disputeOk);
+        }
+      } else if (p.t > 12) {
+        S.happy -= 5;
+        const f = FIELDS()[0];
+        if (f) f.hp = 0.4;
+        p.done = true;
+        log(
+          "<b>The quarrel became a fight.</b> A field was trampled and nobody knows whose it is.",
+        );
+      }
+    }
+  }
+  S.problems = S.problems.filter((p) => !p.done);
+}
+
+// ---------- tick ----------
+const DOOR_OFF = { panchayat: 44, home: 34, homeM: 40, homeS: 44, house: 33 };
+function nearestDoor(p) {
+  let best = null,
+    bd = 22;
+  S.buildings.forEach((b) => {
+    if (b.under || !(b.id in DOOR_OFF)) return;
+    const d = Math.hypot(p.x - b.x, p.y - (b.y + DOOR_OFF[b.id]));
+    if (d < bd) {
+      bd = d;
+      best = b;
+    }
+  });
+  return best;
+}
+function doorHtml(b) {
+  const night = S.phase === "night";
+  if (b.id === "panchayat")
+    return `<h4>Panchayat Bhavan</h4><p>${S.rank < 1 ? "Meet your neighbours and learn about the village election." : night ? (S.sabhaDone ? "Quiet. The meeting is over." : "Lamps lit. The village is inside for the Sabha.") : S.collected ? "The land map is on the table inside." : S.treasury + " coins wait in the treasury chest."}</p><button id="hsb">Enter</button>`;
+  if (b === HOME)
+    return `<h4>Your house</h4><p>${night ? "Your bed is inside." : "Your own four walls."}</p><button id="hsb">Enter</button>`;
+  const r = residentOf(b);
+  const nm = r ? r.n : "Empty house";
+  return `<h4>${nm}${r ? "'s house" : ""}</h4><p>${r ? r.job + ". " : ""}${night ? "A lamp is lit." : "The door is open."}</p><button id="hsb">Enter</button>`;
+}
+function nearestVillager(p) {
+  let best = null,
+    bd = 22;
+  S.villagers.forEach((v) => {
+    const d = Math.hypot(p.x - v.x, p.y - v.y);
+    if (d < bd) {
+      bd = d;
+      best = v;
+    }
+  });
+  return best;
+}
+const SOLIDS = [];
+function collideVillage(p) {
+  const push = (sx, sz, r) => {
+    const dx = p.x - sx,
+      dz = p.y - sz;
+    const d = Math.hypot(dx, dz);
+    if (d < r && d > 0.01) {
+      p.x = sx + (dx / d) * r;
+      p.y = sz + (dz / d) * r;
+    }
+  };
+  S.buildings.forEach((b) => {
+    if (["road", "embank", "field", "bins"].includes(b.id)) return;
+    push(b.x, b.y, FOOT[b.id] * 8 + 5);
+  });
+  SOLIDS.forEach((o) => push(o.x, o.z, o.r));
+  // the river: only the bridge crosses it
+  const RL = RIVER.x - 22,
+    RR = RIVER.x + RIVER.w + 22;
+  if (p.x > RL && p.x < RR) {
+    if (Math.abs(p.y - BRIDGE_Y) > 21) {
+      p.x = p.x - RL < RR - p.x ? RL : RR;
+    } else {
+      p.y = Math.max(BRIDGE_Y - 21, Math.min(BRIDGE_Y + 21, p.y));
+    }
+  }
+}
+function tick(dt) {
+  const speed = S.asleep ? 3 : 1;
+  S.t += dt * speed;
+  const len = S.phase === "day" ? S.dayLen : S.nightLen;
+  if (S.t >= len) {
+    S.t = 0;
+    if (S.phase === "day") {
+      S.phase = "night";
+      dusk();
+    } else {
+      if (!S.sabhaDone) sabhaWithoutYou();
+      if (S.rank >= 1 && !S.asleep) {
+        S.happy -= 3;
+        log(NOTES.late);
+      }
+      S.phase = "day";
+      S.day++;
+      dawn();
+    }
+  }
+  if (S.phase === "night" && !S.asleep && S.sabhaDone) {
+    S.awake -= dt;
+    if (S.awake <= 0 && S.rank >= 1 && S.rank < 2) {
+      sleep(true);
+    }
+    if (S.scene === "village")
+      S.problems.forEach((q) => {
+        if (!q.rep && Math.hypot(S.player.x - q.x, S.player.y - q.y) < 70) {
+          q.rep = true;
+          S.reported.push(q.k);
+          S.approval += 1;
+          log(
+            `<b>Reported:</b> ${{ thief: "a thief in the fields", flood: "water rising by the river", plastic: "plastic on the road", sick: "fever in the houses", dispute: "a land dispute" }[q.k]}. The Panchayat will hear of it at dawn.`,
+          );
+        }
+      });
+  }
+  if (
+    S.rank >= 1 &&
+    S.phase === "day" &&
+    !S.dayThiefDone &&
+    S.t > 30 &&
+    !S.problems.some((p) => p.k === "thief") &&
+    FIELDS().length
+  ) {
+    S.problems.push({ k: "thief", day: true, x: 150, y: 950, t: 0 });
+    log(
+      "<b>A stranger is walking toward your field.</b> It is daylight. Go and stop him.",
+    );
+  }
+  const p = S.player;
+  let mx = 0,
+    my = 0;
+  if (!S.asleep && !S.transition) {
+    if (S.keys["w"] || S.keys["arrowup"]) my -= 1;
+    if (S.keys["s"] || S.keys["arrowdown"]) my += 1;
+    if (S.keys["a"] || S.keys["arrowleft"]) mx -= 1;
+    if (S.keys["d"] || S.keys["arrowright"]) mx += 1;
+    mx += stickV.x;
+    my += stickV.y;
+    if (mx || my) {
+      const d = Math.max(1, Math.hypot(mx, my));
+      const fx = -Math.sin(cam.yaw),
+        fz = -Math.cos(cam.yaw),
+        rx = Math.cos(cam.yaw),
+        rz = -Math.sin(cam.yaw);
+      const wx = (fx * -my + rx * mx) / d,
+        wz = (fz * -my + rz * mx) / d;
+      const run = S.keys["shift"] || S.autoRun ? 1.7 : 1;
+      if (S.scene === "village") {
+        const sp =
+          32 *
+          run *
+          (S.count("road") ? 1.2 : 1) *
+          (S.phase === "night" ? 0.9 : 1);
+        p.x += wx * sp * dt;
+        p.y += wz * sp * dt;
+        p.face = Math.atan2(wx, wz);
+      } else {
+        const r = S.room,
+          q = S.inside;
+        const sp = 3.2 * run;
+        q.x += wx * sp * dt;
+        q.z += wz * sp * dt;
+        q.x = Math.max(-r.W / 2 + 0.6, Math.min(r.W / 2 - 0.6, q.x));
+        q.z = Math.max(-r.D / 2 + 0.6, Math.min(r.D / 2 - 0.4, q.z));
+        r.solids.forEach((o) => {
+          if (o.r) {
+            const dx = q.x - o.x,
+              dz = q.z - o.z;
+            const dd = Math.hypot(dx, dz);
+            if (dd < o.r + 0.45 && dd > 0.001) {
+              q.x = o.x + (dx / dd) * (o.r + 0.45);
+              q.z = o.z + (dz / dd) * (o.r + 0.45);
+            }
+          } else {
+            const dx = q.x - o.x,
+              dz = q.z - o.z;
+            const px = o.hw + 0.45 - Math.abs(dx),
+              pz = o.hd + 0.45 - Math.abs(dz);
+            if (px > 0 && pz > 0) {
+              if (px < pz) q.x += (dx >= 0 ? 1 : -1) * px;
+              else q.z += (dz >= 0 ? 1 : -1) * pz;
+            }
+          }
+        });
+        q.face = Math.atan2(wx, wz);
+      }
+      p.moving = true;
+    } else p.moving = false;
+    // jump
+    if (S.keys[" "] && p.jy <= 0) {
+      p.vy = 5.4;
+    }
+    p.vy -= 15 * dt;
+    p.jy = Math.max(0, p.jy + p.vy * dt);
+    if (p.jy === 0 && p.vy < 0) p.vy = 0;
+    if (S.scene === "village") {
+      p.x = Math.max(40, Math.min(W - 40, p.x));
+      p.y = Math.max(40, Math.min(H - 40, p.y));
+      collideVillage(p);
+    }
+    if (S.talking) {
+      S.talking.t -= dt;
+      const w = S.talking.who;
+      const far =
+        S.scene === "village" && !S.talking.keepReading && w.x !== undefined
+          ? Math.hypot(p.x - w.x, p.y - w.y) > 55
+          : false;
+      if (S.talking.t <= 0 || far) S.talking = null;
+    }
+  }
+  if (!S.asleep && !S.transition) {
+    // Speech is presentation only: nearby actions stay available while it plays.
+    if (S.scene === "village") {
+      const d = nearestDoor(p);
+      const v = nearestVillager(p);
+      if (window.VillageLife && VillageLife.interact(p, actEdge)) {
+      } else if (
+        v &&
+        (!d ||
+          Math.hypot(p.x - v.x, p.y - v.y) <
+            Math.hypot(p.x - d.x, p.y - (d.y + DOOR_OFF[d.id])))
+      ) {
+        showPrompt(
+          "v" + v.i,
+          `<h4>${v.n} <span class="tiny">(${v.job})</span></h4><p>Say hello.</p><button id="hsb">Talk</button>`,
+        );
+        const btn = document.getElementById("hsb");
+        if (btn) btn.onclick = () => startTalk(v);
+        if (actEdge) startTalk(v);
+      } else if (d) {
+        const html = doorHtml(d);
+        showPrompt("door" + d.x + d.y + html.length, html);
+        const btn = document.getElementById("hsb");
+        if (btn) btn.onclick = () => enterRoom(d);
+        if (actEdge) enterRoom(d);
+      } else if (window.astraNearby && astraNearby(p, actEdge)) {
+      } else if (promptKey) closePrompt();
+    } else {
+      const r = S.room,
+        q = S.inside;
+      let hs = null,
+        hd = 99;
+      if (q.z > r.D / 2 - 1.4 && Math.abs(q.x) < 1.6) hs = r.doorSpot;
+      else
+        r.hotspots.forEach((h) => {
+          const dd = Math.hypot(h.x - q.x, h.z - q.z);
+          if (dd < (h.r || 2.2) && dd < hd) {
+            hd = dd;
+            hs = h;
+          }
+        });
+      if (hs) {
+        const html = hs.html();
+        showPrompt(hs.key + html.length, html);
+        const btn = document.getElementById("hsb");
+        if (btn) btn.onclick = () => hs.act && hs.act();
+        if (actEdge && hs.act) hs.act();
+      } else if (promptKey) closePrompt();
+    }
+  }
+  actEdge = false;
+  S.buildings.forEach((b) => {
+    if (b.under) b.prog = S.phase === "day" ? Math.min(1, S.t / S.dayLen) : 1;
+  });
+  S.villagers.forEach((v) => {
+    v.wait -= dt;
+    if (v.wait <= 0) {
+      const pool = S.buildings.filter(
+        (b) => !b.under && b.id !== "panchayat" && b.x < RIVER.x,
+      );
+      const homes = pool.filter(
+        (b) =>
+          b.id === "house" ||
+          b.id === "home" ||
+          b.id === "homeM" ||
+          b.id === "homeS",
+      );
+      let b =
+        S.phase === "night"
+          ? homes[Math.floor(Math.random() * homes.length)]
+          : pool[Math.floor(Math.random() * pool.length)];
+      if (S.phase === "day" && Math.random() < 0.3)
+        b = { x: VC.x, y: VC.y + 40, id: "chowk" };
+      v.tx = b.x + rnd(-50, 50);
+      v.ty = b.y + rnd(30, 70);
+      v.wait = S.phase === "night" ? 999 : rnd(3, 9);
+    }
+    const dx = v.tx - v.x,
+      dy = v.ty - v.y,
+      d = Math.hypot(dx, dy);
+    if (d > 2) {
+      v.x += (dx / d) * 14 * dt;
+      v.y += (dy / d) * 14 * dt;
+      v.face = Math.atan2(dx, dy);
+      collideVillage({
+        get x() {
+          return v.x;
+        },
+        set x(x) {
+          v.x = x;
+        },
+        get y() {
+          return v.y;
+        },
+        set y(y) {
+          v.y = y;
+        },
+      });
+      v.moving = true;
+    } else v.moving = false;
+  });
+  updateProblems(dt * speed);
+  if (S.happy <= 0 && !S.over) {
+    S.over = true;
+    screen(
+      `<h2>The village walked out of the Gram Sabha.</h2><p>Happiness reached zero. People need grain, water and quiet nights before they trust a leader.</p><button id="again">Start over</button>`,
+    );
+    document.getElementById("again").onclick = () => VillageLife.restart();
+  }
+}
+function startTalk(v) {
+  v.wait = Math.max(v.wait, 6);
+  v.tx = v.x;
+  v.ty = v.y;
+  v.face = Math.atan2(S.player.x - v.x, S.player.y - v.y);
+  talkTo(v);
+}
+function sleep(forced) {
+  if (S.scene === "interior") leaveRoom(true);
+  S.asleep = true;
+  S.talking = null;
+  closePrompt();
+  document.getElementById("sleep").classList.remove("hidden");
+  document.getElementById("sleep").firstChild.textContent = forced
+    ? "Lamps out"
+    : "Sleeping";
+  document.getElementById("sleepNote").textContent =
+    (forced ? "Villagers must be indoors. " : "") +
+    "Watch the night; the log tells you what the village faced.";
+  if (forced) log(NOTES.doze);
+}
+
+/* ============================================================
+   RENDERER · Three.js, flat shaded, an Indian village
+   ============================================================ */
+const cv = document.getElementById("c");
+// A phone should not pay desktop GPU costs for a small display.
+const mobileGraphics =
+  matchMedia("(pointer:coarse)").matches &&
+  Math.min(innerWidth, innerHeight) <= 900;
+THREE.ColorManagement.enabled = false;
+const renderer = new THREE.WebGLRenderer({
+  canvas: cv,
+  antialias: !mobileGraphics,
+  powerPreference: "high-performance",
+});
+renderer.setPixelRatio(
+  Math.min(mobileGraphics ? 1.25 : 2, devicePixelRatio || 1),
+);
+renderer.shadowMap.enabled = !mobileGraphics;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xdbe7ee, 130, 370);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 900);
+function onResize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", onResize);
+onResize();
+const hemi = new THREE.HemisphereLight(0xd6e6f2, 0x4f6b3a, 0.55);
+scene.add(hemi);
+const lantern = new THREE.PointLight(0xffc880, 0, 38, 1.6);
+scene.add(lantern);
+const bhavanLamp = new THREE.PointLight(0xffb060, 0, 34, 1.5);
+bhavanLamp.position.set(U(PANCH.x), 4.5, U(PANCH.y) + 4);
+scene.add(bhavanLamp);
+const sun = new THREE.DirectionalLight(0xffe9c9, 0.9);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 10;
+sun.shadow.camera.far = 300;
+sun.shadow.camera.left = -90;
+sun.shadow.camera.right = 90;
+sun.shadow.camera.top = 90;
+sun.shadow.camera.bottom = -90;
+sun.shadow.bias = -0.0008;
+scene.add(sun);
+scene.add(sun.target);
+const mat = (c, o = {}) =>
+  new THREE.MeshPhongMaterial({
+    color: new THREE.Color(c).convertSRGBToLinear(),
+    flatShading: true,
+    shininess: 0,
+    specular: 0x000000,
+    ...o,
+  });
+const M = {
+  grass: mat(0xffffff, { vertexColors: true }),
+  water: mat(0x4a7fb0),
+  sand: mat(0xcfc09a),
+  road: mat(0xbfa77e),
+  path: mat(0xb59a6a),
+  mud: mat(0x9a7d55),
+  wall: mat(0xdccba6),
+  ochre: mat(0xd9b26a),
+  whitewash: mat(0xf1e9d6),
+  bluewash: mat(0x9fb9cf),
+  pink: mat(0xe3c1a8),
+  cream: mat(0xf3e3c3),
+  band: mat(0xf0c34a),
+  trim: mat(0x3e7a4a),
+  roofRed: mat(0xa04e37),
+  roofBrown: mat(0x7a5a3a),
+  roofBlue: mat(0x4a7fb5),
+  roofGold: mat(0xe0a63c),
+  roofNavy: mat(0x23385e),
+  roofDark: mat(0x5b5f6b),
+  khaprail: mat(0xb5563a),
+  mudroof: mat(0xa88b62),
+  white: mat(0xf5f2ea),
+  wheat: mat(0xc9b04e),
+  wheatDark: mat(0xa8932f),
+  mustard: mat(0xe6c92f),
+  mustardG: mat(0x9fb04a),
+  straw: mat(0xd9b85a),
+  leaf: mat(0x3f7a3c),
+  leaf2: mat(0x4d8a46),
+  leaf3: mat(0x5e9a4c),
+  leafDark: mat(0x2f6a35),
+  bush: mat(0x3a6b38),
+  trunk: mat(0x6b4a2b),
+  trunkDark: mat(0x4f3620),
+  stone: mat(0x8c8c8c),
+  concrete: mat(0xbfbfb8),
+  skin: mat(0xe9c9a6),
+  cloth: [mat(0xe9c9a6), mat(0x4a7fb5), mat(0xc8552e), mat(0xe0a63c)],
+  cloths: [
+    mat(0xd8d2c2),
+    mat(0xe0a63c),
+    mat(0x4a7fb5),
+    mat(0xc8552e),
+    mat(0x7a9e7e),
+    mat(0xb56576),
+    mat(0xe9c9a6),
+    mat(0x8a6fa8),
+  ],
+  thief: mat(0x2b2b2b),
+  bin: mat(0x5f6d6a),
+  bin2: mat(0x4a7fb5),
+  orange: mat(0xe7a25a),
+  saffron: mat(0xf28c28),
+  flagGreen: mat(0x138808),
+  cowWhite: mat(0xf0ece4),
+  cowBrown: mat(0x6e4a32),
+  buffalo: mat(0x3a3a3a),
+  pumpRed: mat(0xc03a2a),
+  flood: new THREE.MeshPhongMaterial({
+    color: 0x5f93c4,
+    transparent: true,
+    opacity: 0.55,
+    shininess: 0,
+  }),
+  ripple: new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.22,
+  }),
+  plastic: mat(0xdedede),
+  cross: mat(0xc8552e),
+  embank: mat(0x8a7a5a),
+  scaffold: mat(0xb08a5a),
+  window: new THREE.MeshPhongMaterial({
+    color: 0xf7d98a,
+    emissive: 0xf7c86a,
+    emissiveIntensity: 0,
+    shininess: 0,
+  }),
+  lamp: new THREE.MeshBasicMaterial({ color: 0xffd27a }),
+  sign: mat(0x2a4f8f),
+};
+const lerpC = (a, b, t) => a.clone().lerp(b, t);
+const tmpC = new THREE.Color();
+
+// ---------- sky, stars, hills ----------
+const skyGroup = new THREE.Group();
+scene.add(skyGroup);
+const SKY_R = 520;
+const skyGeo = new THREE.SphereGeometry(SKY_R, 24, 14);
+{
+  const n = skyGeo.attributes.position.count;
+  skyGeo.setAttribute(
+    "color",
+    new THREE.BufferAttribute(new Float32Array(n * 3), 3),
+  );
+}
+const sky = new THREE.Mesh(
+  skyGeo,
+  new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    side: THREE.BackSide,
+    fog: false,
+    depthWrite: false,
+    toneMapped: false,
+  }),
+);
+skyGroup.add(sky);
+let skyKey = "";
+function setSky(zenith, horizon) {
+  const key = zenith.getHex() + ":" + horizon.getHex();
+  if (key === skyKey) return;
+  skyKey = key;
+  const pos = skyGeo.attributes.position,
+    col = skyGeo.attributes.color;
+  for (let i = 0; i < pos.count; i++) {
+    const t = Math.max(0, pos.getY(i) / SKY_R);
+    tmpC.copy(horizon).lerp(zenith, Math.pow(t, 0.55));
+    col.setXYZ(i, tmpC.r, tmpC.g, tmpC.b);
+  }
+  col.needsUpdate = true;
+}
+const stars = (() => {
+  const n = 600,
+    a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    let x, y, z;
+    do {
+      x = rnd(-1, 1);
+      y = rnd(0.08, 1);
+      z = rnd(-1, 1);
+    } while (x * x + y * y + z * z > 1 || x * x + y * y + z * z < 0.6);
+    const l = Math.hypot(x, y, z);
+    a[i * 3] = (x / l) * SKY_R * 0.98;
+    a[i * 3 + 1] = (y / l) * SKY_R * 0.98;
+    a[i * 3 + 2] = (z / l) * SKY_R * 0.98;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(a, 3));
+  return new THREE.Points(
+    g,
+    new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 2,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0,
+      fog: false,
+      depthWrite: false,
+    }),
+  );
+})();
+skyGroup.add(stars);
+{
+  const cx = U(W) / 2,
+    cz = U(H) / 2;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2 + rnd(-0.12, 0.12);
+    const d = rnd(300, 370);
+    const r = rnd(30, 62),
+      h = rnd(9, 20);
+    const m = new THREE.Mesh(
+      new THREE.ConeGeometry(r, h, 7),
+      mat(
+        tmpC
+          .setHex(0x4f7d5e)
+          .lerp(new THREE.Color(0x6a9474), rnd(0, 1))
+          .getHex(),
+      ),
+    );
+    m.position.set(cx + Math.cos(a) * d, h / 2 - 3, cz + Math.sin(a) * d);
+    m.rotation.y = rnd(0, 6);
+    scene.add(m);
+  }
+}
+
+// ---------- ground with vertex colours ----------
+const POND = { x: 125, z: 148, r: 7 };
+let groundGeo = null,
+  GGW = 0,
+  GGH = 0;
+{
+  const GW = U(W) + 560,
+    GH = U(H) + 560;
+  GGW = GW;
+  GGH = GH;
+  const g = new THREE.PlaneGeometry(GW, GH, 150, 120);
+  groundGeo = g;
+  const pos = g.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const base = new THREE.Color(0x7a9c55),
+    dry = new THREE.Color(0xa9a85c),
+    earth = new THREE.Color(0xb39a6c),
+    sand = new THREE.Color(0xc9b98a),
+    far = new THREE.Color(0x5c8a4a),
+    mud = new THREE.Color(0x8f7a55);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i),
+      y = pos.getY(i);
+    const rx = x + U(W) / 2,
+      rz = -y + U(H) / 2;
+    const rivL = U(RIVER.x),
+      rivR = U(RIVER.x + RIVER.w);
+    const inRiver = rx > rivL - 3 && rx < rivR + 3;
+    const dv = Math.hypot(rx - U(VC.x), rz - U(VC.y) + 2);
+    const dp = Math.hypot(rx - POND.x, (rz - POND.z) * 1.3);
+    const onMap = rx > -20 && rx < U(W) + 20 && rz > -20 && rz < U(H) + 20;
+    const k = dv < 50 ? 0.12 : 1;
+    pos.setZ(
+      i,
+      inRiver
+        ? -0.5
+        : dp < POND.r + 1
+          ? -0.35
+          : k *
+              (Math.sin(rx * 0.37) * Math.cos(rz * 0.31) * 0.35 +
+                Math.sin(rx * 1.3 + rz * 0.7) * 0.15) +
+            (onMap
+              ? 0
+              : Math.max(0, Math.sin(rx * 0.05) * Math.cos(rz * 0.04)) * 2.5),
+    );
+    const n =
+      Math.sin(rx * 0.23 + 1) * Math.cos(rz * 0.19) +
+      Math.sin(rx * 0.7 + rz * 0.4) * 0.5;
+    tmpC.copy(base).multiplyScalar(1 + n * 0.06);
+    const pch = Math.sin(rx * 0.11 + 2) * Math.cos(rz * 0.09 + 1);
+    if (pch > 0.4) tmpC.lerp(dry, (pch - 0.4) * 1.1);
+    if (dv < 42) tmpC.lerp(earth, Math.pow(1 - dv / 42, 1.2) * 0.75);
+    if (dp < POND.r + 3) tmpC.lerp(mud, clamp01((POND.r + 3 - dp) / 3) * 0.8);
+    const db = Math.min(Math.abs(rx - rivL), Math.abs(rx - rivR));
+    if (db < 7 && !inRiver) tmpC.lerp(sand, (1 - db / 7) * 0.9);
+    if (!onMap) tmpC.lerp(far, 0.5);
+    tmpC.convertSRGBToLinear();
+    col[i * 3] = tmpC.r;
+    col[i * 3 + 1] = tmpC.g;
+    col[i * 3 + 2] = tmpC.b;
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, M.grass);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(U(W) / 2, 0, U(H) / 2);
+  m.receiveShadow = true;
+  scene.add(m);
+}
+// Height of the ground mesh under a world point, bilinear over the plane grid.
+function groundY(x, z) {
+  const pos = groundGeo.attributes.position;
+  const nx = 150,
+    nz = 120;
+  const fi = Math.max(
+      0,
+      Math.min(nx - 0.001, (x - U(W) / 2 + GGW / 2) / (GGW / nx)),
+    ),
+    fj = Math.max(
+      0,
+      Math.min(nz - 0.001, (z - U(H) / 2 + GGH / 2) / (GGH / nz)),
+    );
+  const i = Math.floor(fi),
+    j = Math.floor(fj),
+    u = fi - i,
+    v = fj - j;
+  const h = (ii, jj) => pos.getZ(jj * (nx + 1) + ii);
+  return (
+    h(i, j) * (1 - u) * (1 - v) +
+    h(i + 1, j) * u * (1 - v) +
+    h(i, j + 1) * (1 - u) * v +
+    h(i + 1, j + 1) * u * v
+  );
+}
+// ---------- river, banks, bridge ----------
+const ripples = [];
+const camBlockers = [];
+{
+  const len = U(H) + 560;
+  const river = new THREE.Mesh(
+    new THREE.BoxGeometry(U(RIVER.w) + 6, 1.2, len),
+    M.water,
+  );
+  river.position.set(U(RIVER.x) + U(RIVER.w) / 2, -0.62, U(H) / 2);
+  river.receiveShadow = true;
+  scene.add(river);
+  for (let i = 0; i < 30; i++) {
+    const s = new THREE.Mesh(
+      new THREE.PlaneGeometry(rnd(0.8, 1.6), rnd(3, 7)),
+      M.ripple,
+    );
+    s.rotation.x = -Math.PI / 2;
+    s.position.set(
+      U(RIVER.x) + rnd(1.5, U(RIVER.w) - 1.5),
+      0.02,
+      rnd(-40, U(H) + 40),
+    );
+    s.userData.v = rnd(2.5, 4.5);
+    scene.add(s);
+    ripples.push(s);
+  }
+  // the bridge: stone piers, a plank deck, low railings
+  const bl = U(RIVER.w) + 10,
+    bz = U(BRIDGE_Y),
+    bx = U(RIVER.x) + U(RIVER.w) / 2;
+  const deck = new THREE.Mesh(
+    new THREE.BoxGeometry(bl, 0.35, 4.4),
+    M.roofBrown,
+  );
+  deck.position.set(bx, 0.55, bz);
+  deck.castShadow = deck.receiveShadow = true;
+  scene.add(deck);
+  for (let i = 0; i < Math.floor(bl / 0.9); i++) {
+    const pl = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.06, 4.2),
+      i % 2 ? M.trunk : M.roofBrown,
+    );
+    pl.position.set(bx - bl / 2 + 0.45 + i * 0.9, 0.76, bz);
+    scene.add(pl);
+  }
+  for (const s of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(bl, 0.12, 0.12), M.trunk);
+    rail.position.set(bx, 1.5, bz + s * 2.1);
+    scene.add(rail);
+    for (let i = 0; i <= Math.floor(bl / 2.6); i++) {
+      const post = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16, 1, 0.16),
+        M.trunk,
+      );
+      post.position.set(bx - bl / 2 + i * 2.6, 1.05, bz + s * 2.1);
+      scene.add(post);
+    }
+  }
+  for (const px of [bx - bl / 3, bx, bx + bl / 3]) {
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 5), M.stone);
+    pier.position.set(px, -0.5, bz);
+    scene.add(pier);
+  }
+  // ramps of packed earth at both ends
+  for (const s of [-1, 1]) {
+    const ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 0.5, 4.6), M.path);
+    ramp.position.set(bx + s * (bl / 2 + 2.6), 0.15, bz);
+    ramp.receiveShadow = true;
+    scene.add(ramp);
+  }
+}
+
+// ---------- flora ----------
+function tree(s) {
+  const g = new THREE.Group();
+  g.userData.kind = "tree";
+  const kind = Math.random();
+  const tr = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2 * s, 0.32 * s, 1.6 * s, 5),
+    M.trunk,
+  );
+  tr.position.y = 0.8 * s;
+  g.add(tr);
+  const lm = [M.leaf, M.leaf2, M.leaf3, M.leafDark][
+    Math.floor(Math.random() * 4)
+  ];
+  if (kind < 0.75) {
+    for (const [ox, oy, oz, r] of [
+      [0, 2.4, 0, 1.35],
+      [0.9, 2.0, 0.4, 1.05],
+      [-0.8, 2.1, -0.3, 1.1],
+      [0.1, 2.9, -0.7, 0.95],
+    ]) {
+      const c = new THREE.Mesh(new THREE.DodecahedronGeometry(r * s, 0), lm);
+      c.position.set(ox * s, oy * s, oz * s);
+      c.rotation.set(rnd(0, 3), rnd(0, 3), 0);
+      g.add(c);
+    }
+  } else {
+    tr.scale.y = 1.6;
+    tr.position.y = 1.3 * s;
+    for (const [ox, oy, oz, r] of [
+      [0, 3.2, 0, 1.2],
+      [0.7, 2.7, 0.5, 0.9],
+      [-0.7, 2.8, -0.4, 0.9],
+    ]) {
+      const c = new THREE.Mesh(new THREE.DodecahedronGeometry(r * s, 0), lm);
+      c.position.set(ox * s, oy * s, oz * s);
+      c.rotation.set(rnd(0, 3), rnd(0, 3), 0);
+      g.add(c);
+    }
+  }
+  g.traverse((o) => {
+    o.castShadow = true;
+  });
+  return g;
+}
+function palm(s) {
+  const g = new THREE.Group();
+  const tr = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14 * s, 0.24 * s, 4.2 * s, 6),
+    M.trunkDark,
+  );
+  tr.position.y = 2.1 * s;
+  tr.rotation.z = rnd(-0.12, 0.12);
+  g.add(tr);
+  const top = new THREE.Group();
+  top.position.y = 4.2 * s;
+  for (let i = 0; i < 7; i++) {
+    const f = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4 * s, 0.06, 0.5 * s),
+      M.leaf2,
+    );
+    f.position.x = 1.1 * s;
+    const h = new THREE.Group();
+    h.add(f);
+    h.rotation.y = (i / 7) * Math.PI * 2;
+    h.rotation.z = -0.55;
+    f.castShadow = true;
+    top.add(h);
+  }
+  const nut = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22 * s, 5, 4),
+    M.roofBrown,
+  );
+  nut.position.set(0.2, -0.2, 0.2);
+  top.add(nut);
+  g.add(top);
+  tr.castShadow = true;
+  return g;
+}
+function bush(s) {
+  const m = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(s, 0),
+    Math.random() < 0.5 ? M.bush : M.leaf,
+  );
+  m.position.y = s * 0.6;
+  m.scale.y = 0.7;
+  m.castShadow = true;
+  return m;
+}
+// Things that are not plots but still take up ground: the banyan, the temple, the pond, cattle, haystacks.
+const DECOR = [
+  { x: U(VC.x), z: U(VC.y) - 3, r: 9 },
+  { x: 148, z: 70, r: 5 },
+  { x: POND.x, z: POND.z, r: 9.5 },
+  { x: 114, z: 76, r: 1.5 },
+];
+const plotClear = (x, z, margin) =>
+  PLOTS.some(
+    (pl) => Math.hypot(U(pl.x) - x, U(pl.y) - z) < FOOT[pl.id] + margin,
+  ) ||
+  DECOR.some((d) => Math.hypot(d.x - x, d.z - z) < d.r + margin) ||
+  Math.hypot(x - U(PANCH.x), z - U(PANCH.y) - 2) < 8 ||
+  (Math.abs(x - U(PANCH.x)) < 5 && z > U(PANCH.y) - 4 && z < U(HOME.y) + 6) ||
+  (z > U(BRIDGE_Y) - 4 &&
+    z < U(BRIDGE_Y) + 4 &&
+    x > U(VC.x) &&
+    x < U(RIVER.x) + U(RIVER.w) + 12);
+const onRiver = (x) => x > U(RIVER.x) - 9 && x < U(RIVER.x + RIVER.w) + 5;
+{
+  const GW = U(W),
+    GH = U(H);
+  let n = 0,
+    tries = 0;
+  while (n < 190 && tries < 4000) {
+    tries++;
+    const x = rnd(-60, GW + 60),
+      z = rnd(-60, GH + 60);
+    if (onRiver(x) || plotClear(x, z, 4.5)) continue;
+    const near = x > -5 && x < GW + 5 && z > -5 && z < GH + 5;
+    if (near && Math.random() < 0.4) continue;
+    if (Math.hypot(x - U(VC.x), z - U(VC.y)) < 46 && Math.random() < 0.8)
+      continue;
+    const t = tree(rnd(1.3, 2.4));
+    t.position.set(x, groundY(x, z) - 0.05, z);
+    t.rotation.y = rnd(0, 6);
+    scene.add(t);
+    SOLIDS.push({ x: x * 10, z: z * 10, r: 7 });
+    n++;
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + rnd(-0.3, 0.3);
+    const x = POND.x + Math.cos(a) * (POND.r + 2.5),
+      z = POND.z + Math.sin(a) * (POND.r * 0.8 + 2.5);
+    if (i % 2) continue;
+    const p = palm(rnd(1, 1.4));
+    p.position.set(x, 0, z);
+    p.rotation.y = rnd(0, 6);
+    scene.add(p);
+    SOLIDS.push({ x: x * 10, z: z * 10, r: 5 });
+  }
+  n = 0;
+  tries = 0;
+  while (n < 80 && tries < 2500) {
+    tries++;
+    const x = rnd(-30, GW + 30),
+      z = rnd(-30, GH + 30);
+    if (onRiver(x) || plotClear(x, z, 3)) continue;
+    const b = bush(rnd(0.5, 1.1));
+    b.position.set(x, 0, z);
+    b.rotation.y = rnd(0, 6);
+    scene.add(b);
+    n++;
+  }
+  for (let i = 0; i < 16; i++) {
+    const r = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(rnd(0.4, 0.9), 0),
+      M.stone,
+    );
+    const x = rnd(-20, GW + 20),
+      z = rnd(-20, GH + 20);
+    if (onRiver(x) || plotClear(x, z, 2)) continue;
+    r.position.set(x, 0.2, z);
+    r.rotation.set(rnd(0, 3), rnd(0, 3), 0);
+    r.castShadow = true;
+    scene.add(r);
+  }
+}
+
+// ---------- buildings ----------
+function box(w, h, d, m, x = 0, y = 0, z = 0) {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  b.position.set(x, y, z);
+  b.castShadow = true;
+  b.receiveShadow = true;
+  return b;
+}
+function roof(w, d, h, m, y) {
+  const r = new THREE.Mesh(
+    new THREE.ConeGeometry(Math.max(w, d) * 0.72, h, 4),
+    m,
+  );
+  r.rotation.y = Math.PI / 4;
+  r.position.y = y + h / 2;
+  r.castShadow = true;
+  r.scale.set(w / Math.max(w, d), 1, d / Math.max(w, d));
+  return r;
+}
+function win(g, x, y, z, w = 0.8, h = 0.7) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), M.window);
+  m.position.set(x, y, z);
+  g.add(m);
+  const f = box(w + 0.16, h + 0.16, 0.06, M.trunk, x, y, z - 0.02);
+  g.add(f);
+  return m;
+}
+function parapet(g, w, d, y, m) {
+  const t = 0.22,
+    h = 0.45;
+  g.add(box(w, h, t, m, 0, y + h / 2, -d / 2 + t / 2));
+  g.add(box(w, h, t, m, 0, y + h / 2, d / 2 - t / 2));
+  g.add(box(t, h, d, m, -w / 2 + t / 2, y + h / 2, 0));
+  g.add(box(t, h, d, m, w / 2 - t / 2, y + h / 2, 0));
+}
+function charpai(g, x, z, ry) {
+  const c = new THREE.Group();
+  c.position.set(x, 0, z);
+  c.rotation.y = ry;
+  c.add(box(1.9, 0.08, 0.95, M.straw, 0, 0.5, 0));
+  for (const [a, b] of [
+    [-0.85, -0.4],
+    [0.85, -0.4],
+    [-0.85, 0.4],
+    [0.85, 0.4],
+  ])
+    c.add(box(0.1, 0.5, 0.1, M.trunk, a, 0.25, b));
+  g.add(c);
+}
+function pot(g, x, z, s = 1) {
+  const p = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32 * s, 6, 5),
+    M.khaprail,
+  );
+  p.position.set(x, 0.3 * s, z);
+  p.scale.y = 0.85;
+  p.castShadow = true;
+  g.add(p);
+}
+function haystack() {
+  const g = new THREE.Group();
+  const c = new THREE.Mesh(new THREE.ConeGeometry(1.15, 2.1, 7), M.straw);
+  c.position.y = 1.05;
+  c.castShadow = true;
+  g.add(c);
+  g.add(box(0.08, 2.5, 0.08, M.trunk, 0, 1.25, 0));
+  return g;
+}
+function cow(m) {
+  const g = new THREE.Group();
+  g.add(box(1.7, 0.85, 0.75, m, 0, 1, 0));
+  g.add(box(0.55, 0.5, 0.45, m, 1.05, 1.15, 0));
+  g.add(box(0.12, 0.3, 0.08, M.trunkDark, 1.2, 1.5, -0.15));
+  g.add(box(0.12, 0.3, 0.08, M.trunkDark, 1.2, 1.5, 0.15));
+  for (const [x, z] of [
+    [-0.65, -0.25],
+    [0.65, -0.25],
+    [-0.65, 0.25],
+    [0.65, 0.25],
+  ])
+    g.add(box(0.16, 0.62, 0.16, m, x, 0.31, z));
+  g.add(box(0.08, 0.6, 0.08, M.trunkDark, -0.9, 0.9, 0));
+  return g;
+}
+function seedOf(b) {
+  return b
+    ? Math.abs(Math.sin(b.x * 12.9898 + b.y * 78.233)) % 1
+    : Math.random();
+}
+function indianHouse(g, w, h, d, wallM, seed, opts = {}) {
+  g.add(box(w, h, d, wallM, 0, h / 2, 0));
+  if (seed < 0.4) {
+    g.add(box(w + 0.3, 0.22, d + 0.3, M.mudroof, 0, h + 0.11, 0));
+    parapet(g, w + 0.3, d + 0.3, h + 0.22, wallM);
+  } else {
+    g.add(roof(w + 0.6, d + 0.6, 1.5, M.khaprail, h - 0.05));
+  }
+  if (opts.band) g.add(box(w + 0.04, 0.35, d + 0.04, opts.band, 0, 0.6, 0));
+  g.add(box(0.95, 1.5, 0.14, M.trunkDark, opts.doorX || 0, 0.75, d / 2 + 0.02));
+  win(g, -w / 2 + 1.1, 1.55, d / 2 + 0.02, 0.7, 0.6);
+  if (w > 4.2) win(g, w / 2 - 1.1, 1.55, d / 2 + 0.02, 0.7, 0.6);
+  charpai(g, w / 2 + 1.2, d / 2 - 0.3, rnd(-0.2, 0.2));
+  pot(g, -w / 2 - 0.4, d / 2 + 0.5);
+  pot(g, -w / 2 - 0.9, d / 2 + 0.3, 0.8);
+  if (opts.hay) {
+    const hs = haystack();
+    hs.position.set(-w / 2 - 1.4, 0, -d / 2 - 0.6);
+    g.add(hs);
+  }
+  if (opts.tulsi) {
+    g.add(box(0.45, 0.7, 0.45, M.khaprail, w / 2 - 0.6, 0.35, d / 2 + 1.1));
+    const t = bush(0.32);
+    t.position.set(w / 2 - 0.6, 0.75, d / 2 + 1.1);
+    g.add(t);
+  }
+}
+function buildingMesh(id, b) {
+  const g = new THREE.Group();
+  const seed = seedOf(b);
+  switch (id) {
+    case "home":
+      indianHouse(g, 4.8, 2.7, 4.2, M.bluewash, 0.2, {
+        tulsi: true,
+        band: M.whitewash,
+      });
+      break;
+    case "house": {
+      const walls = [M.ochre, M.whitewash, M.pink, M.cream, M.bluewash];
+      indianHouse(g, 4.4, 2.6, 4, walls[Math.floor(seed * 5) % 5], seed, {
+        hay: seed > 0.5,
+      });
+      break;
+    }
+    case "homeM": {
+      g.add(box(6.2, 2.9, 4.4, M.ochre, 0, 1.45, 0));
+      g.add(box(6.5, 0.22, 4.7, M.mudroof, 0, 3.0, 0));
+      parapet(g, 6.5, 4.7, 3.1, M.ochre);
+      g.add(box(3.2, 2.6, 3.2, M.cream, -4.3, 1.3, 0.6));
+      g.add(roof(3.8, 3.8, 1.4, M.khaprail, 2.55));
+      g.children[g.children.length - 1].position.x = -4.3;
+      g.children[g.children.length - 1].position.z = 0.6;
+      g.add(box(6.2, 0.35, 4.5, M.trim, 0, 0.55, 0));
+      g.add(box(1, 1.6, 0.14, M.trunkDark, 0.6, 0.8, 2.22));
+      win(g, -1.6, 1.7, 2.22);
+      win(g, 2.4, 1.7, 2.22);
+      for (const x of [-2.6, 2.6])
+        g.add(box(0.22, 2.4, 0.22, M.whitewash, x, 1.2, 3.2));
+      g.add(box(6.4, 0.18, 1.8, M.mudroof, 0, 2.5, 3.1));
+      for (const [x, z] of [
+        [-6.4, 3.2],
+        [3.9, 3.2],
+      ])
+        g.add(box(0.2, 0.9, 3, M.ochre, x, 0.45, z - 0.2));
+      g.add(box(2.6, 0.9, 0.2, M.ochre, -5.1, 0.45, 4.6));
+      g.add(box(2.6, 0.9, 0.2, M.ochre, 2.6, 0.45, 4.6));
+      charpai(g, -2, 4.2, 0.1);
+      pot(g, -5.6, 4);
+      const hs = haystack();
+      hs.position.set(4.8, 0, -2.6);
+      g.add(hs);
+      break;
+    }
+    case "homeS": {
+      g.add(box(7.2, 3, 5, M.whitewash, 0, 1.5, 0));
+      g.add(box(7.2, 0.4, 5.04, M.trim, 0, 0.6, 0));
+      g.add(box(7.5, 0.22, 5.3, M.mudroof, 0, 3.1, 0));
+      parapet(g, 7.5, 5.3, 3.2, M.whitewash);
+      g.add(box(4.4, 2.5, 3.4, M.whitewash, 0.9, 4.45, -0.5));
+      g.add(roof(5, 4, 1.6, M.khaprail, 5.65));
+      g.children[g.children.length - 1].position.set(0.9, 6.45, -0.5);
+      win(g, 0.9, 4.7, 1.22);
+      g.add(box(1.05, 1.7, 0.14, M.trunkDark, -1.6, 0.85, 2.52));
+      win(g, 1.2, 1.8, 2.52);
+      win(g, -3, 1.8, 2.52, 0.7, 0.6);
+      for (const x of [-3.2, 0, 3.2])
+        g.add(box(0.26, 2.6, 0.26, M.trim, x, 1.3, 3.7));
+      g.add(box(7.4, 0.2, 2.2, M.mudroof, 0, 2.75, 3.5));
+      g.add(box(7.4, 0.12, 2.2, M.khaprail, 0, 2.9, 3.5));
+      g.add(box(0.2, 1, 4, M.whitewash, -4.6, 0.5, 3));
+      g.add(box(0.2, 1, 4, M.whitewash, 4.6, 0.5, 3));
+      g.add(box(3.2, 1, 0.2, M.whitewash, -3, 0.5, 5));
+      g.add(box(3.2, 1, 0.2, M.whitewash, 3, 0.5, 5));
+      charpai(g, 2.6, 4.3, 0);
+      pot(g, -3.8, 4.6);
+      const t = tree(1.6);
+      t.position.set(5.6, 0, -3.4);
+      g.add(t);
+      break;
+    }
+    case "panchayat": {
+      g.add(box(7.4, 3.2, 5.4, M.whitewash, 0, 1.6, 0));
+      g.add(box(7.44, 0.5, 5.44, M.band, 0, 0.75, 0));
+      g.add(box(7.8, 0.24, 5.8, M.mudroof, 0, 3.3, 0));
+      parapet(g, 7.8, 5.8, 3.42, M.whitewash);
+      for (const x of [-2.6, 2.6])
+        g.add(box(0.28, 2.8, 0.28, M.whitewash, x, 1.4, 3.9));
+      g.add(box(7.6, 0.2, 2.4, M.mudroof, 0, 2.95, 3.7));
+      g.add(box(2, 1.9, 0.14, M.trunkDark, 0, 0.95, 2.72));
+      win(g, -2.4, 2, 2.72);
+      win(g, 2.4, 2, 2.72);
+      win(g, -2, 2, -2.72);
+      win(g, 2, 2, -2.72);
+      g.add(box(3.4, 0.7, 0.1, M.sign, 0, 2.55, 2.76));
+      g.add(box(2.4, 0.12, 0.02, M.whitewash, 0, 2.65, 2.83));
+      g.add(box(1.6, 0.08, 0.02, M.whitewash, 0, 2.42, 2.83));
+      g.add(box(0.15, 6, 0.15, M.concrete, 4.4, 3, 3));
+      const fl = new THREE.Group();
+      fl.position.set(4.5, 5.6, 3);
+      fl.add(box(1.5, 0.28, 0.05, M.saffron, 0.75, 0.28, 0));
+      fl.add(box(1.5, 0.28, 0.05, M.white, 0.75, 0, 0));
+      fl.add(box(1.5, 0.28, 0.05, M.flagGreen, 0.75, -0.28, 0));
+      g.add(fl);
+      const l1 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 5), M.lamp);
+      l1.position.set(-1.6, 2.4, 2.8);
+      g.add(l1);
+      const l2 = l1.clone();
+      l2.position.x = 1.6;
+      g.add(l2);
+      g.userData.anim = (t) => {
+        fl.rotation.y = Math.sin(t * 2.2) * 0.18;
+      };
+      g.add(box(3, 0.5, 1.6, M.concrete, 0, 0.25, 4.6));
+      break;
+    }
+    case "field": {
+      g.add(box(5.8, 0.3, 4.6, M.wheatDark, 0, 0.15, 0));
+      const must = seed > 0.55;
+      for (let i = 0; i < 5; i++)
+        g.add(
+          box(
+            5.2,
+            0.55,
+            0.45,
+            must ? M.mustardG : M.wheat,
+            0,
+            0.5,
+            -1.6 + i * 0.8,
+          ),
+        );
+      if (must)
+        for (let i = 0; i < 5; i++)
+          for (let j = 0; j < 6; j++)
+            g.add(
+              box(
+                0.25,
+                0.2,
+                0.25,
+                M.mustard,
+                -2.3 + j * 0.92,
+                0.85,
+                -1.6 + i * 0.8,
+              ),
+            );
+      const bm = M.mud;
+      g.add(box(6.2, 0.35, 0.3, bm, 0, 0.17, -2.45));
+      g.add(box(6.2, 0.35, 0.3, bm, 0, 0.17, 2.45));
+      g.add(box(0.3, 0.35, 5.2, bm, -3.05, 0.17, 0));
+      g.add(box(0.3, 0.35, 5.2, bm, 3.05, 0.17, 0));
+      break;
+    }
+    case "dairy":
+      g.add(box(5, 2.2, 4, M.ochre, 0, 1.1, 0));
+      g.add(box(5.8, 0.4, 4.8, M.straw, 0, 2.4, 0));
+      for (let i = 0; i < 2; i++) {
+        const c = cow(i ? M.cowBrown : M.cowWhite);
+        c.position.set(-3.6, 0, -1 + i * 1.8);
+        c.rotation.y = Math.PI / 2;
+        g.add(c);
+      }
+      g.add(box(0.2, 1, 4.2, M.trunk, -4.6, 0.5, 0));
+      break;
+    case "well": {
+      const w = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.4, 1.5, 1, 8),
+        M.stone,
+      );
+      w.position.y = 0.5;
+      w.castShadow = true;
+      g.add(w);
+      const wa = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.1, 1.1, 0.2, 8),
+        M.water,
+      );
+      wa.position.y = 1;
+      g.add(wa);
+      g.add(box(0.2, 2.4, 0.2, M.trunk, -1.2, 1.6, 0));
+      g.add(box(0.2, 2.4, 0.2, M.trunk, 1.2, 1.6, 0));
+      g.add(box(2.6, 0.15, 0.15, M.trunk, 0, 2.8, 0));
+      const wh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.35, 0.15, 8),
+        M.trunkDark,
+      );
+      wh.rotation.x = Math.PI / 2;
+      wh.position.y = 2.75;
+      g.add(wh);
+      g.add(box(3.2, 0.5, 3.2, M.concrete, 0, 0.05, 0));
+      pot(g, 1.9, 1.4);
+      pot(g, -1.8, 1.5, 0.8);
+      break;
+    }
+    case "forest": {
+      for (let i = 0; i < 4; i++) {
+        const t = tree(rnd(1.2, 1.7));
+        t.position.set(-1.8 + i * 1.2, 0, (i % 2 ? 1 : -1) * 0.9);
+        g.add(t);
+      }
+      break;
+    }
+    case "mill": {
+      g.add(box(4.6, 3.4, 4.4, mat(0xcfcfd6), 0, 1.7, 0));
+      g.add(roof(4.6, 4.4, 2.4, M.roofDark, 3.4));
+      const wheel = new THREE.Group();
+      wheel.position.set(2.5, 1.8, 0);
+      const disc = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 1.6, 0.3, 8),
+        M.trunk,
+      );
+      disc.rotation.z = Math.PI / 2;
+      disc.castShadow = true;
+      wheel.add(disc);
+      for (let i = 0; i < 4; i++) {
+        const sp = box(0.25, 3.4, 0.5, M.roofBrown, 0, 0, 0);
+        sp.rotation.x = (i * Math.PI) / 4;
+        wheel.add(sp);
+      }
+      g.add(wheel);
+      win(g, 0, 2, 2.25);
+      g.userData.anim = (t) => {
+        wheel.rotation.x = t * 0.9;
+      };
+      break;
+    }
+    case "workshop":
+      g.add(box(5.2, 2.6, 4.2, mat(0xc9a97a), 0, 1.3, 0));
+      g.add(roof(5.2, 4.2, 2, M.roofBrown, 2.6));
+      g.add(box(1.2, 1.2, 1.2, M.roofBrown, -3.3, 0.6, 1));
+      g.add(box(0.9, 0.9, 0.9, M.trunk, -3.1, 1.8, 1));
+      win(g, 0.8, 1.6, 2.15, 1.2, 0.8);
+      break;
+    case "market":
+      g.add(box(6, 0.5, 4, M.roofBrown, 0, 0.25, 0));
+      for (let i = 0; i < 4; i++)
+        g.add(
+          box(0.2, 2.6, 0.2, M.trunk, -2.7 + i * 1.8, 1.3, i % 2 ? 1.8 : -1.8),
+        );
+      g.add(box(6.6, 0.3, 4.6, M.orange, 0, 2.7, 0));
+      for (let i = 0; i < 3; i++)
+        g.add(box(1.4, 0.5, 4.6, M.white, -2.2 + i * 2.2, 2.8, 0));
+      g.add(box(1.5, 0.8, 1, mat(0xd8c25a), -1.6, 0.9, 0));
+      g.add(box(1.5, 0.8, 1, mat(0xc8552e), 0.4, 0.9, 0.3));
+      break;
+    case "school":
+      g.add(box(5.6, 2.6, 4.4, M.whitewash, 0, 1.3, 0));
+      g.add(box(5.64, 0.35, 4.44, M.roofBlue, 0, 0.5, 0));
+      g.add(box(5.9, 0.22, 4.7, M.mudroof, 0, 2.7, 0));
+      parapet(g, 5.9, 4.7, 2.8, M.whitewash);
+      g.add(box(0.12, 4.6, 0.12, M.concrete, 2.9, 2.3, 2.3));
+      g.add(box(1.1, 0.7, 0.05, M.saffron, 3.5, 4.2, 2.3));
+      win(g, -1.8, 1.6, 2.25);
+      win(g, 0, 1.6, 2.25);
+      win(g, 1.8, 1.6, 2.25);
+      g.add(box(5.8, 0.9, 0.15, M.whitewash, 0, 0.45, 3.6));
+      break;
+    case "clinic":
+      g.add(box(5, 2.6, 4.2, M.whitewash, 0, 1.3, 0));
+      g.add(box(5.4, 0.4, 4.6, M.roofRed, 0, 2.8, 0));
+      g.add(box(1.4, 0.4, 0.2, M.cross, 0, 1.6, 2.2));
+      g.add(box(0.4, 1.4, 0.2, M.cross, 0, 1.6, 2.2));
+      win(g, -1.7, 1.5, 2.15);
+      win(g, 1.7, 1.5, 2.15);
+      break;
+    case "bins":
+      g.add(box(0.9, 1.5, 0.9, M.bin, -0.6, 0.75, 0));
+      g.add(box(0.9, 1.5, 0.9, M.bin2, 0.6, 0.75, 0));
+      break;
+    case "patwari":
+      g.add(box(4.2, 2.4, 3.6, mat(0xe3d3b0), 0, 1.2, 0));
+      g.add(box(4.5, 0.22, 3.9, M.mudroof, 0, 2.5, 0));
+      parapet(g, 4.5, 3.9, 2.6, mat(0xe3d3b0));
+      g.add(box(1.6, 1.1, 0.1, M.white, 0, 1.3, 1.85));
+      win(g, -1.4, 1.4, 1.85, 0.6, 0.6);
+      break;
+    case "police":
+      g.add(box(4.8, 2.8, 4.2, mat(0xe6e8ee), 0, 1.4, 0));
+      g.add(roof(4.8, 4.2, 2, M.roofNavy, 2.8));
+      g.add(box(0.15, 4.2, 0.15, M.trunk, -2.6, 2.1, 2.2));
+      g.add(box(1.2, 0.7, 0.05, M.roofNavy, -2, 3.7, 2.2));
+      win(g, 1.2, 1.7, 2.15);
+      break;
+    case "embank":
+      g.add(box(1.6, 1.6, U(H) - 60, M.embank, 0, 0.8, 0));
+      break;
+    case "road": {
+      const seg = (x1, z1, x2, z2) => {
+        const dx = x2 - x1,
+          dz = z2 - z1,
+          l = Math.hypot(dx, dz);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(l, 0.25, 2.2), M.road);
+        m.position.set((x1 + x2) / 2, 0.3, (z1 + z2) / 2);
+        m.rotation.y = -Math.atan2(dz, dx);
+        m.receiveShadow = true;
+        g.add(m);
+      };
+      seg(U(850), U(930), U(1250), U(990));
+      seg(U(1250), U(990), U(1250), U(1640));
+      seg(U(1250), U(990), U(1650), U(930));
+      break;
+    }
+  }
+  return g;
+}
+function scaffold() {
+  const g = new THREE.Group();
+  for (const [x, z] of [
+    [-2.6, -2.2],
+    [2.6, -2.2],
+    [-2.6, 2.2],
+    [2.6, 2.2],
+  ])
+    g.add(box(0.2, 3.2, 0.2, M.scaffold, x, 1.6, z));
+  g.add(box(5.4, 0.15, 0.15, M.scaffold, 0, 3.1, -2.2));
+  g.add(box(5.4, 0.15, 0.15, M.scaffold, 0, 3.1, 2.2));
+  g.add(box(0.15, 0.15, 4.6, M.scaffold, -2.6, 3.1, 0));
+  g.add(box(0.15, 0.15, 4.6, M.scaffold, 2.6, 3.1, 0));
+  g.add(box(1.2, 0.8, 1.2, M.stone, 2, 0.4, -2.9));
+  g.add(box(1.4, 0.5, 0.9, M.trunk, -2.2, 0.25, -2.9));
+  return g;
+}
+function person(m, scale = 1) {
+  // Every adult uses the same 1.82 m rig, including residents and the player.
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.23, 0.28, 0.63, 8),
+    m,
+  );
+  body.scale.z = 0.68;
+  body.position.y = 1.04;
+  body.castShadow = true;
+  g.add(body);
+  const hem = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.25, 8), m);
+  hem.scale.z = 0.68;
+  hem.position.y = 0.69;
+  g.add(hem);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.225, 12, 10), M.skin);
+  head.scale.set(0.87, 1.1, 0.88);
+  head.position.y = 1.55;
+  head.castShadow = true;
+  g.add(head);
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.227, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.52),
+    M.trunkDark,
+  );
+  hair.position.y = 1.59;
+  g.add(hair);
+  g.add(box(0.09, 0.12, 0.09, M.skin, 0, 1.51, 0.2));
+  for (const x of [-0.08, 0.08])
+    g.add(box(0.035, 0.035, 0.025, M.trunkDark, x, 1.59, 0.193));
+  g.add(box(0.1, 0.02, 0.02, M.khaprail, 0, 1.44, 0.196));
+  const legs = [],
+    arms = [];
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.14, 0.68, 0);
+    leg.add(box(0.17, 0.53, 0.19, M.cream, 0, -0.265, 0));
+    leg.add(box(0.19, 0.1, 0.32, M.trunkDark, 0, -0.62, 0.06));
+    g.add(leg);
+    legs.push(leg);
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.32, 1.29, 0);
+    arm.add(box(0.17, 0.32, 0.2, m, 0, -0.16, 0));
+    arm.add(box(0.13, 0.28, 0.14, M.skin, 0, -0.45, 0));
+    g.add(arm);
+    arms.push(arm);
+  }
+  const scarf = box(0.11, 0.62, 0.035, M.cream, -0.13, 1.07, 0.166);
+  g.add(scarf);
+  g.userData = { body, legs, arms };
+  return g;
+}
+function animatePerson(g, t, moving) {
+  const a = moving ? Math.sin(t * 8) * 0.55 : 0;
+  g.userData.legs.forEach((l, i) => (l.rotation.x = i ? a : -a));
+  g.userData.arms.forEach((l, i) => (l.rotation.x = i ? -a : a));
+}
+// ---------- the village furniture: banyan chowk, temple, pond, hand pump, cattle, haystacks, cart, lanes ----------
+const cows = [];
+let pumpHandle,
+  pumpStream,
+  pumpUntil = 0;
+{
+  const g = new THREE.Group();
+  g.position.set(U(VC.x), 0, U(VC.y) - 3);
+  const plat = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.8, 4, 0.6, 8),
+    M.whitewash,
+  );
+  plat.position.y = 0.3;
+  plat.receiveShadow = true;
+  g.add(plat);
+  const band = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.85, 3.85, 0.14, 8),
+    M.khaprail,
+  );
+  band.position.y = 0.62;
+  g.add(band);
+  const tr = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.8, 3.4, 7),
+    M.trunkDark,
+  );
+  tr.position.y = 2.3;
+  tr.castShadow = true;
+  g.add(tr);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const c = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(rnd(3, 4.2), 0),
+      i % 2 ? M.leafDark : M.leaf,
+    );
+    c.position.set(Math.cos(a) * 3.2, rnd(5.6, 7.2), Math.sin(a) * 3.2);
+    c.rotation.set(rnd(0, 3), rnd(0, 3), 0);
+    c.castShadow = true;
+    g.add(c);
+  }
+  const top = new THREE.Mesh(new THREE.DodecahedronGeometry(3.6, 0), M.leaf2);
+  top.position.y = 8.2;
+  top.castShadow = true;
+  g.add(top);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.3;
+    const r = rnd(2.4, 4.6);
+    const root = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.12, rnd(3, 5.5), 4),
+      M.trunk,
+    );
+    root.position.set(Math.cos(a) * r, 3.6, Math.sin(a) * r);
+    root.rotation.z = rnd(-0.08, 0.08);
+    g.add(root);
+  }
+  scene.add(g);
+  camBlockers.push(g);
+  SOLIDS.push({ x: VC.x, z: VC.y - 30, r: 42 });
+  // temple
+  const t = new THREE.Group();
+  t.position.set(148, 0, 70);
+  t.add(box(6.2, 0.6, 6.2, M.whitewash, 0, 0.3, 0));
+  t.add(box(2.2, 0.3, 1.4, M.whitewash, 0, 0.15, 3.7));
+  t.add(box(2.9, 2.6, 2.9, M.cream, 0, 1.9, 0));
+  const tiers = [
+    [2.5, 0.9],
+    [2.0, 0.8],
+    [1.5, 0.7],
+    [1.0, 0.6],
+  ];
+  let ty = 3.2;
+  tiers.forEach(([s, h], i) => {
+    t.add(box(s, h, s, i % 2 ? M.saffron : M.cream, 0, ty + h / 2, 0));
+    ty += h;
+  });
+  const kalash = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1, 6), M.roofGold);
+  kalash.position.y = ty + 0.5;
+  kalash.castShadow = true;
+  t.add(kalash);
+  t.add(box(0.08, 2.2, 0.08, M.concrete, 0, ty + 1.6, 0));
+  t.add(box(1.1, 0.6, 0.04, M.saffron, 0.55, ty + 2.4, 0));
+  for (const x of [-1.1, 1.1])
+    t.add(box(0.22, 2.2, 0.22, M.cream, x, 1.7, 2.3));
+  t.add(box(3.2, 0.22, 1.8, M.saffron, 0, 2.85, 2.1));
+  const bell = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.35, 6), M.roofGold);
+  bell.position.set(0, 2.5, 2.2);
+  t.add(bell);
+  scene.add(t);
+  camBlockers.push(t);
+  SOLIDS.push({ x: 1480, z: 700, r: 36 });
+  // pond with reeds
+  const pw = new THREE.Mesh(new THREE.CircleGeometry(POND.r, 32), M.water);
+  pw.rotation.x = -Math.PI / 2;
+  pw.position.set(POND.x, -0.22, POND.z);
+  pw.scale.set(1, 0.78, 1);
+  scene.add(pw);
+  const rim = new THREE.Mesh(
+    new THREE.RingGeometry(POND.r - 0.2, POND.r + 1.4, 32),
+    M.mud,
+  );
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.set(POND.x, 0.03, POND.z);
+  rim.scale.set(1, 0.78, 1);
+  scene.add(rim);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const rd = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.08, rnd(1, 1.6), 4),
+      M.leaf2,
+    );
+    rd.position.set(
+      POND.x + Math.cos(a) * (POND.r - 0.4),
+      0.6,
+      POND.z + Math.sin(a) * (POND.r - 0.4) * 0.78,
+    );
+    rd.rotation.z = rnd(-0.15, 0.15);
+    scene.add(rd);
+  }
+  SOLIDS.push({ x: POND.x * 10, z: POND.z * 10, r: 78 });
+  // hand pump by the lane
+  const hp = new THREE.Group();
+  hp.position.set(114, 0, 76);
+  hp.add(box(1, 0.25, 1, M.concrete, 0, 0.12, 0));
+  hp.add(box(0.28, 1.3, 0.28, M.pumpRed, 0, 0.9, 0));
+  const hd = box(1.3, 0.1, 0.1, M.pumpRed, 0.55, 1.6, 0);
+  hd.rotation.z = 0.5;
+  hp.add(hd);
+  pumpHandle = hd;
+  const stream = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.06, 0.95, 6),
+    M.water,
+  );
+  stream.position.set(-0.58, 0.63, 0);
+  stream.visible = false;
+  hp.add(stream);
+  pumpStream = stream;
+  hp.add(box(0.5, 0.1, 0.12, M.pumpRed, -0.35, 1.15, 0));
+  pot(hp, -0.6, 0.6);
+  scene.add(hp);
+  SOLIDS.push({ x: 1140, z: 760, r: 8 });
+  // cattle
+  for (const [x, z, m, ry] of [
+    [131, 101, M.cowWhite, 0.4],
+    [135, 99, M.cowBrown, 2.6],
+    [118, 152, M.buffalo, 1.2],
+    [132, 156, M.buffalo, -0.6],
+    [60, 80, M.cowWhite, 1.9],
+    [72, 100, M.cowBrown, -2],
+  ]) {
+    const c = cow(m);
+    c.position.set(x, groundY(x, z), z);
+    c.rotation.y = ry;
+    scene.add(c);
+    cows.push(c);
+    c.userData.home = { x, z };
+    c.userData.phase = ry;
+  }
+  // haystacks by the fields
+  for (const [x, z] of [
+    [68, 60],
+    [56, 92],
+    [50, 116],
+    [98, 72],
+    [160, 128],
+    [178, 100],
+  ]) {
+    const h = haystack();
+    h.position.set(x, groundY(x, z), z);
+    scene.add(h);
+    SOLIDS.push({ x: x * 10, z: z * 10, r: 13 });
+  }
+  // a bullock cart by the chowk
+  const cart = new THREE.Group();
+  cart.position.set(133, 0, 88);
+  cart.rotation.y = 0.6;
+  cart.add(box(2.6, 0.15, 1.3, M.trunk, 0, 1, 0));
+  cart.add(box(2.6, 0.5, 0.08, M.trunk, 0, 1.3, -0.62));
+  cart.add(box(2.6, 0.5, 0.08, M.trunk, 0, 1.3, 0.62));
+  for (const s of [-1, 1]) {
+    const w = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.75, 0.75, 0.14, 10),
+      M.trunkDark,
+    );
+    w.rotation.x = Math.PI / 2;
+    w.position.set(0, 0.75, s * 0.8);
+    cart.add(w);
+  }
+  cart.add(box(2.2, 0.08, 0.08, M.trunk, 2.3, 0.9, -0.3));
+  cart.add(box(2.2, 0.08, 0.08, M.trunk, 2.3, 0.9, 0.3));
+  cart.add(box(1.2, 0.5, 0.9, M.straw, -0.4, 1.35, 0));
+  scene.add(cart);
+  camBlockers.push(cart);
+  SOLIDS.push({ x: 1330, z: 880, r: 16 });
+  // the fixed lanes: chowk to the bridge, chowk to the temple, chowk to the pond
+  const lane = (x1, z1, x2, z2, w = 2) => {
+    const dx = x2 - x1,
+      dz = z2 - z1,
+      l = Math.hypot(dx, dz);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(l, 0.1, w), M.path);
+    m.position.set((x1 + x2) / 2, 0.05, (z1 + z2) / 2);
+    m.rotation.y = -Math.atan2(dz, dx);
+    m.receiveShadow = true;
+    scene.add(m);
+  };
+  lane(U(VC.x) + 4, U(VC.y) + 2, U(RIVER.x) - 4, U(BRIDGE_Y), 2.4);
+  lane(U(VC.x) + 3, U(VC.y) - 3, 146, 74, 1.6);
+  lane(U(VC.x), U(VC.y) + 4, POND.x - 4, POND.z - 6, 1.6);
+  lane(U(VC.x) - 4, U(VC.y) - 4, 116, 78, 1.4);
+}
+const playerMesh = person(M.cloth[2]);
+{
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), M.lamp);
+  lamp.position.set(0.6, 0.75, 0.25);
+  lamp.visible = false;
+  playerMesh.add(lamp);
+  playerMesh.userData.lamp = lamp;
+}
+scene.add(playerMesh);
+const built = new Map(),
+  vil = [],
+  prob = new Map(),
+  scaf = new Map();
+const camRay = new THREE.Raycaster();
+const pathsGroup = new THREE.Group();
+scene.add(pathsGroup);
+let pathKey = "",
+  pathBuildingsKey = "";
+function rebuildPaths() {
+  const buildingsKey = S.buildings
+    .map((b) => b.id + "," + b.x + "," + b.y + "," + !!b.under)
+    .join("|");
+  if (buildingsKey === pathBuildingsKey) return;
+  pathBuildingsKey = buildingsKey;
+  const links = pathLinks();
+  const key = links
+    .map(([a, b]) => a.x + "," + a.y + "-" + b.x + "," + b.y)
+    .join("|");
+  if (key === pathKey) return;
+  pathKey = key;
+  while (pathsGroup.children.length) {
+    const old = pathsGroup.children[0];
+    old.geometry.dispose();
+    pathsGroup.remove(old);
+  }
+  links.forEach(([a, b]) => {
+    const x1 = U(a.x),
+      z1 = U(a.y),
+      x2 = U(b.x),
+      z2 = U(b.y);
+    const dx = x2 - x1,
+      dz = z2 - z1,
+      l = Math.hypot(dx, dz);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(l, 0.1, 1.6), M.path);
+    m.position.set((x1 + x2) / 2, 0.04, (z1 + z2) / 2);
+    m.rotation.y = -Math.atan2(dz, dx);
+    m.receiveShadow = true;
+    pathsGroup.add(m);
+  });
+}
+const labels = document.getElementById("labels");
+const labelEls = new Map();
+function label(key, text, cls) {
+  let el = labelEls.get(key);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "lab";
+    labels.appendChild(el);
+    labelEls.set(key, el);
+  }
+  if (el.dataset.t !== text || el.dataset.c !== cls) {
+    el.innerHTML = text;
+    el.className = "lab " + (cls || "");
+    el.dataset.t = text;
+    el.dataset.c = cls || "";
+  }
+  el._used = true;
+  return el;
+}
+const v3 = new THREE.Vector3();
+let hudBottom = 64,
+  frameNo = 0;
+function place(el, x, y, z, goal) {
+  v3.set(x, y, z).project(camera);
+  if (v3.z > 1) {
+    el.style.display = "none";
+    return;
+  }
+  let sx = ((v3.x + 1) / 2) * innerWidth,
+    sy = ((1 - v3.y) / 2) * innerHeight;
+  if (goal) sy = Math.max(sy, hudBottom + 26);
+  else if (
+    sy < hudBottom + 6 ||
+    sx < 40 ||
+    sx > innerWidth - 40 ||
+    sy > innerHeight - 8
+  ) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "";
+  el.style.left = sx + "px";
+  el.style.top = sy + "px";
+}
+
+// ---------- time of day ----------
+// u runs 0 (dawn) .. 0.6 (dusk) through the day, 0.6 .. 1 through the night.
+const C = (h) => new THREE.Color(h).convertSRGBToLinear();
+const DAYKEYS = [
+  {
+    u: 0.0,
+    z: C(0x8fb0cc),
+    h: C(0xf3d7b0),
+    sun: C(0xffd2a0),
+    si: 0.7,
+    hi: 0.5,
+    hs: C(0xe6d6c0),
+  },
+  {
+    u: 0.1,
+    z: C(0x86b4d6),
+    h: C(0xdbe7ee),
+    sun: C(0xffe9c9),
+    si: 0.95,
+    hi: 0.55,
+    hs: C(0xd6e6f2),
+  },
+  {
+    u: 0.45,
+    z: C(0x86b4d6),
+    h: C(0xdbe7ee),
+    sun: C(0xffe9c9),
+    si: 0.95,
+    hi: 0.55,
+    hs: C(0xd6e6f2),
+  },
+  {
+    u: 0.55,
+    z: C(0x7aa2c8),
+    h: C(0xf0c58a),
+    sun: C(0xffc27a),
+    si: 0.85,
+    hi: 0.5,
+    hs: C(0xe8d4b8),
+  },
+  {
+    u: 0.6,
+    z: C(0x3f4c78),
+    h: C(0xe07a44),
+    sun: C(0xff8a4a),
+    si: 0.4,
+    hi: 0.35,
+    hs: C(0xb08a80),
+  },
+  {
+    u: 0.66,
+    z: C(0x0f1830),
+    h: C(0x25325a),
+    sun: C(0x8fa6f0),
+    si: 0.1,
+    hi: 0.14,
+    hs: C(0x6070a0),
+  },
+  {
+    u: 0.94,
+    z: C(0x0f1830),
+    h: C(0x25325a),
+    sun: C(0x8fa6f0),
+    si: 0.1,
+    hi: 0.14,
+    hs: C(0x6070a0),
+  },
+  {
+    u: 1.0,
+    z: C(0x8fb0cc),
+    h: C(0xf3d7b0),
+    sun: C(0xffd2a0),
+    si: 0.7,
+    hi: 0.5,
+    hs: C(0xe6d6c0),
+  },
+];
+function dayState(u) {
+  let i = 0;
+  while (i < DAYKEYS.length - 2 && DAYKEYS[i + 1].u <= u) i++;
+  const a = DAYKEYS[i],
+    b = DAYKEYS[i + 1];
+  const t = (u - a.u) / (b.u - a.u);
+  const s = t * t * (3 - 2 * t);
+  return {
+    z: lerpC(a.z, b.z, s),
+    h: lerpC(a.h, b.h, s),
+    sun: lerpC(a.sun, b.sun, s),
+    si: a.si + (b.si - a.si) * s,
+    hi: a.hi + (b.hi - a.hi) * s,
+    hs: lerpC(a.hs, b.hs, s),
+  };
+}
+let hudHtml = "",
+  camInit = false,
+  lastNow = performance.now();
+function sync() {
+  frameNo++;
+  const now = performance.now(),
+    rdt = Math.min(0.05, (now - lastNow) / 1000);
+  lastNow = now;
+  const animT = now / 1000;
+  if (frameNo % 10 === 1) {
+    const hb = Math.max(
+      document.getElementById("hud").getBoundingClientRect().bottom,
+      document.getElementById("clock").getBoundingClientRect().bottom,
+      matchMedia("(max-width:700px), (pointer:coarse) and (max-height:600px)")
+        .matches
+        ? document.querySelector(".mission")?.getBoundingClientRect().bottom ||
+            0
+        : 0,
+    );
+    if (hb !== hudBottom) {
+      hudBottom = hb;
+      document.documentElement.style.setProperty("--hud", hb + "px");
+    }
+  }
+  labels.style.visibility = S.paused || S.scene === "interior" ? "hidden" : "";
+  const p = S.player;
+  // buildings
+  S.buildings.forEach((b) => {
+    let g = built.get(b);
+    if (!g) {
+      g = buildingMesh(b.id, b);
+      g.position.set(U(b.x), 0, U(b.y));
+      if (b.id === "embank") g.position.set(U(RIVER.x) - 7, 0, U(H) / 2);
+      g.rotation.y = [
+        "field",
+        "road",
+        "embank",
+        "home",
+        "homeM",
+        "homeS",
+        "panchayat",
+      ].includes(b.id)
+        ? 0
+        : rnd(-0.12, 0.12);
+      scene.add(g);
+      built.set(b, g);
+      if (!["road", "embank", "field", "bins"].includes(b.id))
+        camBlockers.push(g);
+    }
+    const flat = [
+      "road",
+      "embank",
+      "field",
+      "bins",
+      "forest",
+      "market",
+    ].includes(b.id);
+    if (b.under) {
+      const pr = b.prog || 0;
+      if (flat) {
+        g.scale.set(Math.max(0.05, pr), 1, Math.max(0.05, pr));
+        g.position.y = 0;
+      } else {
+        g.scale.set(1, 1, 1);
+        g.position.y = -(1 - pr) * 5.2;
+      }
+      let sc = scaf.get(b);
+      if (!sc && !["road", "embank", "field", "bins"].includes(b.id)) {
+        sc = scaffold();
+        sc.position.set(g.position.x, 0, g.position.z);
+        scene.add(sc);
+        scaf.set(b, sc);
+      }
+    } else {
+      g.scale.setScalar(g.userData.baseScale || 1);
+      g.position.y = 0;
+      const sc = scaf.get(b);
+      if (sc) {
+        scene.remove(sc);
+        scaf.delete(b);
+      }
+    }
+    g.rotation.z = b.hp < 1 ? -0.08 : 0;
+    if (g.userData.anim && !b.under) g.userData.anim(animT);
+  });
+  rebuildPaths();
+  S.buildings.forEach((b) => {
+    if (b.under) {
+      place(
+        label(
+          "u" + b.x + b.y,
+          "building " + Math.round((b.prog || 0) * 100) + "%",
+          "warn",
+        ),
+        U(b.x),
+        4.2,
+        U(b.y),
+      );
+    }
+  });
+  if (S.rank >= 1 && S.phase === "day" && !S.collected)
+    place(
+      label("goalP", "Collect coins and plan", "goal"),
+      U(PANCH.x),
+      7.4,
+      U(PANCH.y),
+      true,
+    );
+  if (S.phase === "night" && !S.sabhaDone && !S.asleep)
+    place(
+      label("goalS", "Night Sabha: take your seat", "goal"),
+      U(PANCH.x),
+      7.4,
+      U(PANCH.y),
+      true,
+    );
+  if (S.rank >= 1 && S.phase === "night" && S.sabhaDone && !S.asleep)
+    place(
+      label(
+        "goalH",
+        S.rank >= 2 ? "Home, when you choose" : "Home, before the lamps go out",
+        "goal",
+      ),
+      U(HOME.x),
+      6.5,
+      U(HOME.y),
+      true,
+    );
+  // people, with name tags when close
+  spawnVillagers();
+  vil.forEach((m, i) => {
+    if (i >= S.villagers.length) m.visible = false;
+  });
+  while (vil.length < S.villagers.length) {
+    const v = S.villagers[vil.length];
+    const m = person(M.cloths[v.c || 0]);
+    scene.add(m);
+    vil.push(m);
+  }
+  S.villagers.forEach((v, i) => {
+    const m = vil[i];
+    animatePerson(m, animT + i, v.moving && !S.paused);
+    const gy = groundY(U(v.x), U(v.y));
+    m.position.set(U(v.x), gy, U(v.y));
+    if (v.face !== undefined) m.rotation.y = v.face;
+    m.userData.body.rotation.z = 0;
+    m.visible = !(S.phase === "night" && S.sabhaDone && !v.moving);
+    if (
+      m.visible &&
+      S.talking?.who !== v &&
+      S.scene === "village" &&
+      Math.hypot(p.x - v.x, p.y - v.y) < 55
+    )
+      place(label("n" + i, v.n, "name"), U(v.x), gy + 1.9, U(v.y));
+  });
+  updateAstraWorld(S.paused ? 0 : rdt);
+  GameSystems.world.forEach((fn) => fn(S.paused ? 0 : rdt));
+  playerMesh.visible = !S.asleep;
+  if (S.scene === "interior") {
+    playerMesh.position.set(S.inside.x, p.jy, S.inside.z);
+    playerMesh.rotation.y = S.inside.face;
+  } else {
+    playerMesh.position.set(U(p.x), groundY(U(p.x), U(p.y)) + p.jy, U(p.y));
+    playerMesh.rotation.y = p.face;
+  }
+  if (!playerMesh.userData.cornerRig)
+    playerMesh.userData.body.material = M.cloth[[2, 1, 3][S.rank] || 2];
+  animatePerson(playerMesh, animT, p.moving && !S.paused);
+  playerMesh.userData.body.rotation.z = 0;
+  // problems
+  const alive = new Set();
+  S.problems.forEach((q) => {
+    alive.add(q);
+    let g = prob.get(q);
+    if (!g) {
+      g = new THREE.Group();
+      if (q.k === "thief") {
+        g.add(person(M.thief, 0.8));
+      }
+      if (q.k === "flood") {
+        const c = new THREE.Mesh(new THREE.CircleGeometry(1, 36), M.flood);
+        c.rotation.x = -Math.PI / 2;
+        c.position.y = 0.15;
+        g.add(c);
+        g.userData.c = c;
+        const r = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 36), M.ripple);
+        r.rotation.x = -Math.PI / 2;
+        r.position.y = 0.17;
+        g.add(r);
+        g.userData.ring = r;
+      }
+      if (q.k === "plastic") {
+        for (let i = 0; i < 7; i++) {
+          const b = box(
+            rnd(0.4, 0.7),
+            rnd(0.3, 0.5),
+            rnd(0.4, 0.7),
+            M.plastic,
+            rnd(-1.6, 1.6),
+            0.2,
+            rnd(-1.1, 1.1),
+          );
+          b.rotation.y = rnd(0, 3);
+          g.add(b);
+        }
+      }
+      if (q.k === "sick") {
+        const c = new THREE.Group();
+        c.add(box(1.1, 0.3, 0.3, M.cross, 0, 0, 0));
+        c.add(box(0.3, 1.1, 0.3, M.cross, 0, 0, 0));
+        c.position.y = 3.6;
+        g.add(c);
+        g.userData.bob = c;
+      }
+      if (q.k === "dispute") {
+        const a = person(M.cloths[3], 0.72),
+          b = person(M.cloths[2], 0.72);
+        a.position.x = -1;
+        b.position.x = 1;
+        a.rotation.y = Math.PI / 2;
+        b.rotation.y = -Math.PI / 2;
+        g.add(a);
+        g.add(b);
+        g.userData.pair = [a, b];
+      }
+      scene.add(g);
+      prob.set(q, g);
+    }
+    g.position.set(U(q.x), groundY(U(q.x), U(q.y)), U(q.y));
+    if (q.k === "flood") {
+      const s = U(q.r) + 0.01;
+      g.userData.c.scale.set(s, s, 1);
+      g.userData.ring.scale.set(
+        s * (1 + Math.sin(animT * 2) * 0.04),
+        s * (1 + Math.sin(animT * 2) * 0.04),
+        1,
+      );
+    }
+    if (q.k === "thief") {
+      g.rotation.y = Math.atan2(
+        (q.target ? q.target.x : VC.x) - q.x,
+        (q.target ? q.target.y : VC.y) - q.y,
+      );
+    }
+    if (q.k === "sick") {
+      g.userData.bob.position.y = 3.4 + Math.sin(animT * 2.5) * 0.25;
+      g.userData.bob.rotation.y = animT;
+    }
+    if (q.k === "dispute") {
+      g.userData.pair.forEach((m, i) => {
+        m.userData.body.rotation.z = Math.sin(animT * 6 + i * 3) * 0.12;
+      });
+    }
+    const lab =
+      {
+        thief: q.day ? "stranger" : "thief",
+        flood: q.big ? "flood" : "water rising",
+        plastic: "plastic",
+        sick: "fever",
+        dispute: "land dispute",
+      }[q.k] + (q.rep ? " (reported)" : "");
+    const seen =
+      S.phase === "day" ||
+      S.has("bal") ||
+      q.rep ||
+      S.asleep ||
+      Math.hypot(p.x - q.x, p.y - q.y) < 200;
+    g.visible = seen;
+    if (seen)
+      place(
+        label("q" + q.k + q.x.toFixed(0), lab, "warn"),
+        U(q.x),
+        3.8,
+        U(q.y),
+      );
+  });
+  prob.forEach((g, q) => {
+    if (!alive.has(q)) {
+      scene.remove(g);
+      prob.delete(q);
+    }
+  });
+  labelEls.forEach((el) => {
+    if (!el._used) el.style.display = "none";
+    el._used = false;
+  });
+  ripples.forEach((s) => {
+    s.position.z += s.userData.v * rdt;
+    if (s.position.z > U(H) + 40) s.position.z = -40;
+  });
+  // camera: third-person orbit around the avatar; pulled back and tilted down while asleep
+  let cx = p.x,
+    cz = p.y;
+  if (S.asleep) {
+    const ps = S.problems;
+    if (ps.length) {
+      const q = ps[Math.floor(now / 3500) % ps.length];
+      cx = q.x;
+      cz = q.y;
+    } else {
+      cx = HOME.x;
+      cz = HOME.y;
+    }
+  }
+  const tx = U(cx),
+    tz = U(cz);
+  const orb = (ox, oy, oz, d, pt) =>
+    new THREE.Vector3(
+      ox + Math.sin(cam.yaw) * Math.cos(pt) * d,
+      oy + Math.sin(pt) * d,
+      oz + Math.cos(cam.yaw) * Math.cos(pt) * d,
+    );
+  let tgt, pos;
+  if (S.asleep) {
+    tgt = new THREE.Vector3(tx, 1.5, tz);
+    pos = orb(tx, 1.5, tz, Math.max(cam.dist, 26), Math.max(cam.pitch, 0.8));
+  } else if (S.scene === "interior") {
+    const q = S.inside;
+    tgt = new THREE.Vector3(q.x, 1.3, q.z);
+    pos = orb(q.x, 1.3, q.z, Math.min(cam.dist, 24), Math.max(cam.pitch, 0.35));
+  } else {
+    const gy = groundY(tx, tz);
+    tgt = new THREE.Vector3(tx, gy + 1.4, tz);
+    pos = orb(tx, gy + 1.4, tz, cam.dist, cam.pitch);
+    const gy2 = groundY(pos.x, pos.z);
+    if (pos.y < gy2 + 1.1) pos.y = gy2 + 1.1;
+    const dir = pos.clone().sub(tgt);
+    const dl = dir.length();
+    if (dl > 0.5) {
+      camRay.set(tgt, dir.clone().normalize());
+      camRay.far = dl;
+      const hits = camRay.intersectObjects(camBlockers, true).filter((hit) => {
+        for (let o = hit.object; o; o = o.parent) if (!o.visible) return false;
+        return true;
+      });
+      let d = dl;
+      if (hits.length) d = Math.min(d, hits[0].distance - 0.5);
+      // and never hover over a roof: clamp to the footprint circle of anything the camera would sit above
+      const ROOFH = {
+        homeS: 7.6,
+        panchayat: 5,
+        homeM: 4.8,
+        house: 4.4,
+        home: 4.4,
+        dairy: 3.2,
+        mill: 6,
+        school: 4.2,
+        clinic: 3.6,
+        workshop: 5,
+        patwari: 3.8,
+        police: 5.2,
+        well: 3.6,
+        market: 3.4,
+        forest: 5,
+      };
+      const circles = S.buildings
+        .filter((b) => !["road", "embank", "field", "bins"].includes(b.id))
+        .map((b) => ({
+          x: U(b.x),
+          z: U(b.y),
+          r: FOOT[b.id] * 0.85 + 0.5,
+          h: ROOFH[b.id] || 4.4,
+        }));
+      circles.push(
+        { x: U(VC.x), z: U(VC.y) - 3, r: 2.6, h: 10 },
+        { x: 148, z: 70, r: 4, h: 9 },
+      );
+      const l2 = Math.hypot(dir.x, dir.z) || 1e-6;
+      const dx = dir.x / l2,
+        dz = dir.z / l2;
+      circles.forEach((c) => {
+        const fx = tgt.x - c.x,
+          fz = tgt.z - c.z;
+        const bq = 2 * (fx * dx + fz * dz),
+          cq = fx * fx + fz * fz - c.r * c.r;
+        const disc = bq * bq - 4 * cq;
+        if (disc <= 0) return;
+        const t2 = (-bq - Math.sqrt(disc)) / 2;
+        const t3 = (t2 * dl) / l2;
+        if (t3 > 0.3 && t3 < d) {
+          const yAt = tgt.y + (dir.y / dl) * t3;
+          if (yAt < c.h + 0.6) d = t3 - 0.4;
+        }
+      });
+      d = Math.max(1.2, d);
+      if (d < dl - 1e-3) pos.copy(tgt).addScaledVector(dir.normalize(), d);
+    }
+  }
+  if (!camInit) {
+    camera.position.copy(pos);
+    camInit = true;
+  } else camera.position.lerp(pos, S.asleep ? 0.04 : 0.3);
+  camera.lookAt(tgt);
+  skyGroup.position.copy(camera.position);
+  // light and sky
+  const len = S.phase === "day" ? S.dayLen : S.nightLen;
+  const u = S.phase === "day" ? (0.6 * S.t) / len : 0.6 + (0.4 * S.t) / len;
+  const ds = dayState(u);
+  const nightAmt =
+    u < 0.58
+      ? 0
+      : u < 0.66
+        ? clamp01((u - 0.58) / 0.08)
+        : u < 0.94
+          ? 1
+          : clamp01((1 - u) / 0.06);
+  sun.color.copy(ds.sun);
+  sun.intensity = ds.si * 1.12 * Math.PI;
+  hemi.intensity = ds.hi * 1.35 * Math.PI;
+  hemi.color.copy(ds.hs);
+  setSky(ds.z, ds.h);
+  scene.fog.color.copy(ds.h);
+  stars.material.opacity = nightAmt * 0.85;
+  const a = Math.min(1, u / 0.6) * Math.PI;
+  const sx = tx + Math.cos(a) * 70,
+    sy = 38 + Math.sin(a) * 45;
+  sun.position.set(
+    sx + (tx - 40 - sx) * nightAmt,
+    sy + (60 - sy) * nightAmt,
+    tz + 30,
+  );
+  sun.target.position.set(tx, 0, tz);
+  lantern.intensity = nightAmt * (S.asleep ? 0 : 12);
+  lantern.position.set(U(p.x), 3.2, U(p.y) + 1.5);
+  playerMesh.userData.lamp.visible = nightAmt > 0.3 && !S.asleep;
+  bhavanLamp.intensity = nightAmt * (S.sabhaDone ? 5 : 12);
+  M.window.emissiveIntensity = nightAmt * 0.9;
+  M.lamp.color.setHex(nightAmt > 0.3 ? 0xffd27a : 0xcfc4a0);
+  // hud
+  const html = `<span class="pill rank"><b>${RANKS[S.rank].n}</b><span class="age">${AGES[S.age].n}</span></span><span class="pill"><span class="lbl">works budget</span><b>${S.coins}</b>${S.treasury ? `<span class="plus">+${S.treasury} at Panchayat</span>` : ""}</span><span class="pill"><span class="lbl">grain</span><b>${S.grain}</b><span class="lbl">people</span><b>${S.pop}</b><span class="lbl">happy</span><b>${S.happy}</b></span><span class="pill"><span class="lbl">approval</span><b>${S.approval}%</b></span>${S.problems.length ? `<span class="pill warn">${S.problems.length} problem${S.problems.length > 1 ? "s" : ""}</span>` : ""}${S.phase === "night" && S.sabhaDone && !S.asleep && S.rank < 2 ? `<span class="pill"><span class="lbl">lamp</span><b>${Math.max(0, Math.ceil(S.awake))}s</b></span>` : ""}`;
+  if ((!window.VillageLife || S.rank > 0) && html !== hudHtml) {
+    hudHtml = html;
+    document.getElementById("hud").innerHTML = html;
+  }
+  const clock = document.getElementById("clock");
+  clock.style.setProperty("--p", Math.round((S.t / len) * 100) + "%");
+  clock.classList.toggle("night", S.phase === "night");
+  const dayLabel = document.getElementById("clockN"),
+    phaseLabel = document.getElementById("clockP");
+  if (dayLabel.textContent !== String(S.day)) dayLabel.textContent = S.day;
+  if (phaseLabel.textContent !== S.phase) phaseLabel.textContent = S.phase;
+}
+
+/* ============================================================
+   ROOMS · the Panchayat Bhavan and the houses as walkable interiors
+   Solids are circles {x,z,r} or boxes {x,z,hw,hd}; walls are single-sided so the camera can sit outside.
+   ============================================================ */
+const ROOMS = new Map();
+window.ROOMS = ROOMS;
+const RM = {
+  floor: mat(0xa88f6a),
+  floor2: mat(0xb9a37c),
+  floorS: mat(0xc9b08a),
+  wall: mat(0xdccbab),
+  wallDark: mat(0xcbb893),
+  wallBlue: mat(0xb7c9d6),
+  wallGreen: mat(0xcfd9bd),
+  wood: mat(0x7a5a3a),
+  wood2: mat(0x9a7a4a),
+  paper: mat(0xf4efe3),
+  cloth: mat(0xc8552e),
+  cloth2: mat(0x4a7fb5),
+  cloth3: mat(0xe0a63c),
+  chest: mat(0x6b4a2b),
+  gold: mat(0xe0a63c),
+  clay: mat(0xa0623c),
+  green: mat(0x5f9b52),
+  dark: mat(0x2b2b2b),
+  brass: mat(0xc9a44a),
+};
+function roomFor(b) {
+  let r = ROOMS.get(b);
+  if (r) return r;
+  r = buildRoom(b);
+  r.doorSpot = {
+    key: "door",
+    html: () =>
+      '<h4>Door</h4><p>Back out to the village.</p><button id="hsb">Leave</button>',
+    act: () => leaveRoom(),
+  };
+  ROOMS.set(b, r);
+  return r;
+}
+function rect(x, z, hw, hd) {
+  return { x, z, hw, hd };
+}
+function buildRoom(b) {
+  const type = b.id;
+  const own = b === HOME;
+  const W_ =
+      type === "panchayat"
+        ? 20
+        : type === "homeS"
+          ? 14
+          : type === "homeM"
+            ? 12
+            : 9,
+    D_ =
+      type === "panchayat"
+        ? 14
+        : type === "homeS"
+          ? 10
+          : type === "homeM"
+            ? 9
+            : 8,
+    Hh = 3.6;
+  const sc = new THREE.Scene();
+  sc.background = new THREE.Color(0x141a26);
+  sc.add(new THREE.HemisphereLight(0xfff2dd, 0x5a4a3a, 0.5));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.45);
+  dl.position.set(4, 8, 3);
+  sc.add(dl);
+  const lamp = new THREE.PointLight(0xffc880, 0.9, 20, 1.4);
+  lamp.position.set(0, Hh - 0.4, 0);
+  sc.add(lamp);
+  const g = new THREE.Group();
+  sc.add(g);
+  const wallM =
+    type === "panchayat"
+      ? RM.wallGreen
+      : type === "homeS"
+        ? RM.wall
+        : type === "home"
+          ? RM.wallBlue
+          : RM.wall;
+  g.add(
+    box(
+      W_,
+      0.2,
+      D_,
+      type === "panchayat"
+        ? RM.floor
+        : type === "homeS"
+          ? RM.floorS
+          : RM.floor2,
+      0,
+      -0.1,
+      0,
+    ),
+  );
+  const wall = (w, h, x, y, z, ry, m) => {
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+    q.position.set(x, y, z);
+    q.rotation.y = ry;
+    q.receiveShadow = true;
+    g.add(q);
+  };
+  wall(W_, Hh, 0, Hh / 2, -D_ / 2, 0, wallM);
+  wall(D_, Hh, -W_ / 2, Hh / 2, 0, Math.PI / 2, RM.wallDark);
+  wall(D_, Hh, W_ / 2, Hh / 2, 0, -Math.PI / 2, RM.wallDark);
+  const sw = (W_ - 2) / 2;
+  wall(sw, Hh, -(1 + sw / 2), Hh / 2, D_ / 2, Math.PI, wallM);
+  wall(sw, Hh, 1 + sw / 2, Hh / 2, D_ / 2, Math.PI, wallM);
+  wall(2.2, 0.5, 0, Hh - 0.25, D_ / 2, Math.PI, wallM);
+  g.add(box(0.15, Hh - 0.5, 0.36, RM.wood, -1.05, (Hh - 0.5) / 2, D_ / 2));
+  g.add(box(0.15, Hh - 0.5, 0.36, RM.wood, 1.05, (Hh - 0.5) / 2, D_ / 2));
+  g.add(box(W_ + 0.3, 0.14, 0.28, RM.wood, 0, Hh + 0.02, -D_ / 2));
+  g.add(box(W_ + 0.3, 0.14, 0.28, RM.wood, 0, Hh + 0.02, D_ / 2));
+  g.add(box(0.28, 0.14, D_, RM.wood, -W_ / 2, Hh + 0.02, 0));
+  g.add(box(0.28, 0.14, D_, RM.wood, W_ / 2, Hh + 0.02, 0));
+  // a painted band along the floor, as village walls have
+  g.add(
+    box(
+      W_,
+      0.5,
+      0.06,
+      type === "panchayat" ? RM.cloth3 : RM.clay,
+      0,
+      0.25,
+      -D_ / 2 + 0.04,
+    ),
+  );
+  g.add(
+    box(
+      0.06,
+      0.5,
+      D_,
+      type === "panchayat" ? RM.cloth3 : RM.clay,
+      -W_ / 2 + 0.04,
+      0.25,
+      0,
+    ),
+  );
+  g.add(
+    box(
+      0.06,
+      0.5,
+      D_,
+      type === "panchayat" ? RM.cloth3 : RM.clay,
+      W_ / 2 - 0.04,
+      0.25,
+      0,
+    ),
+  );
+  const winAt = (x, z, ry) => {
+    const w = new THREE.Group();
+    w.position.set(x, 1.9, z);
+    w.rotation.y = ry;
+    w.add(box(1.3, 1.1, 0.12, RM.wood, 0, 0, 0));
+    w.add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.85, 0.08), M.window));
+    g.add(w);
+  };
+  const solids = [],
+    hot = [];
+  const bulb = (x, z) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 5), M.lamp);
+    m.position.set(x, Hh - 0.5, z);
+    g.add(m);
+  };
+  if (type === "panchayat") {
+    winAt(-5, -D_ / 2 + 0.16, 0);
+    winAt(5, -D_ / 2 + 0.16, 0);
+    winAt(-W_ / 2 + 0.16, -2.5, Math.PI / 2);
+    winAt(W_ / 2 - 0.16, -2.5, Math.PI / 2);
+    winAt(-W_ / 2 + 0.16, 2.5, Math.PI / 2);
+    winAt(W_ / 2 - 0.16, 2.5, Math.PI / 2);
+    // the map table at the north end
+    g.add(box(6.4, 0.15, 2.2, RM.wood2, 0, 0.9, -3.6));
+    for (const [x, z] of [
+      [-3, -4.5],
+      [3, -4.5],
+      [-3, -2.7],
+      [3, -2.7],
+    ])
+      g.add(box(0.18, 0.9, 0.18, RM.wood, x, 0.45, z));
+    g.add(box(4.6, 0.05, 1.5, RM.paper, 0, 0.99, -3.6));
+    [
+      [-1.5, -0.3, M.roofRed],
+      [-0.6, -0.5, M.roofGold],
+      [0.6, -0.2, M.roofBlue],
+      [1.4, 0.3, M.wheat],
+      [-1, 0.4, M.leaf],
+      [0.2, 0.45, M.orange],
+    ].forEach(([x, z, m]) =>
+      g.add(box(0.35, 0.04, 0.28, m, x, 1.03, -3.6 + z)),
+    );
+    g.add(box(0.05, 0.06, 1.4, M.water, 2, 1.03, -3.6));
+    solids.push(rect(0, -3.6, 3.3, 1.2));
+    // the chair behind it
+    g.add(box(0.9, 0.1, 0.9, RM.wood, 0, 0.5, -5.5));
+    g.add(box(0.9, 1.1, 0.12, RM.wood, 0, 1.05, -5.9));
+    g.add(box(0.7, 0.15, 0.7, RM.cloth, 0, 0.58, -5.5));
+    solids.push(rect(0, -5.6, 0.5, 0.5));
+    // treasury chest at the west wall
+    g.add(box(1.6, 0.9, 1, RM.chest, -8.6, 0.45, -4.4));
+    g.add(box(1.6, 0.25, 1, RM.gold, -8.6, 1.0, -4.4));
+    g.add(box(0.3, 0.3, 0.1, RM.dark, -8.6, 0.6, -3.88));
+    solids.push(rect(-8.6, -4.4, 0.9, 0.6));
+    // notice board at the east wall
+    g.add(box(0.1, 1.4, 2.2, RM.wood, W_ / 2 - 0.2, 1.9, -1));
+    g.add(box(0.05, 1.1, 1.9, RM.paper, W_ / 2 - 0.26, 1.9, -1));
+    g.add(box(0.04, 0.5, 0.7, RM.cloth2, W_ / 2 - 0.29, 2.05, -1.4));
+    g.add(box(0.04, 0.3, 0.6, RM.gold, W_ / 2 - 0.29, 1.6, -0.5));
+    // benches: three rows, two columns, a wide aisle down the middle
+    for (let r = 0; r < 3; r++)
+      for (let c = -1; c <= 1; c += 2) {
+        const z = 0.4 + r * 2.0,
+          x = c * 3.7;
+        g.add(box(4.2, 0.12, 0.5, RM.wood2, x, 0.45, z));
+        g.add(box(0.15, 0.45, 0.45, RM.wood, x - 1.8, 0.22, z));
+        g.add(box(0.15, 0.45, 0.45, RM.wood, x + 1.8, 0.22, z));
+        solids.push(rect(x, z, 2.1, 0.3));
+      }
+    const l2 = new THREE.PointLight(0xffc880, 0.8, 16, 1.4);
+    l2.position.set(0, Hh - 0.4, -4);
+    sc.add(l2);
+    bulb(0, 0);
+    bulb(0, -4);
+    // a portrait and a calendar on the north wall
+    g.add(box(0.9, 1.1, 0.06, RM.wood, -2.5, 2.3, -D_ / 2 + 0.1));
+    g.add(box(0.7, 0.9, 0.02, RM.paper, -2.5, 2.3, -D_ / 2 + 0.14));
+    g.add(box(0.6, 0.8, 0.06, RM.paper, 2.6, 2.2, -D_ / 2 + 0.1));
+    g.add(box(0.6, 0.2, 0.02, RM.cloth, 2.6, 2.5, -D_ / 2 + 0.14));
+    const clerk = person(M.cloths[4], 0.85);
+    clerk.position.set(-7.2, 0, -3);
+    clerk.rotation.y = Math.PI / 2;
+    g.add(clerk);
+    solids.push({ x: -7.2, z: -3, r: 0.55 });
+    const seated = [];
+    for (let r = 0; r < 3; r++)
+      for (let c = -1; c <= 1; c += 2)
+        for (let k = -1; k <= 1; k++) {
+          const v = person(M.cloths[(r * 3 + k + 4) % 8], 0.72);
+          v.position.set(c * 3.7 + k * 1.3, 0.2, 0.4 + r * 2.0);
+          v.rotation.y = Math.PI;
+          g.add(v);
+          seated.push(v);
+        }
+    const kamla = person(M.cloths[5], 0.85);
+    kamla.position.set(0, 0, -4.9);
+    g.add(kamla);
+    const clerkWho = { n: "Bansi Lal", job: "Panchayat secretary" };
+    hot.push({
+      key: "chest",
+      x: -7.4,
+      z: -4,
+      r: 2.3,
+      html: () =>
+        `<h4>Treasury chest</h4><p>${S.collected ? "Empty until dawn. The night's income comes here." : S.treasury + " coins from the village, held for the Panchayat."}</p>${S.collected ? "" : '<button id="hsb">Collect</button>'}`,
+      act: () => {
+        if (S.rank < 1) {
+          window.VillageLife?.locked();
+          return;
+        }
+        if (!S.collected) {
+          S.coins += S.treasury;
+          log(
+            `<b>Collected ${S.treasury} coins</b> from the Panchayat treasury.`,
+          );
+          S.treasury = 0;
+          S.collected = true;
+        }
+      },
+    });
+    hot.push({
+      key: "clerk",
+      x: -6.6,
+      z: -2.4,
+      r: 1.6,
+      html: () =>
+        `<h4>${clerkWho.n} <span class="tiny">(${clerkWho.job})</span></h4><p>Keeps the minutes and the keys.</p><button id="hsb">Talk</button>`,
+      act: () => {
+        speak(
+          clerkWho,
+          S.collected
+            ? "The map is on the table. Plan well; the Sabha reads the accounts."
+            : "The chest holds " +
+                S.treasury +
+                " coins. Every rupee is written in this register.",
+          { x: -7.2, y: 1.9, z: -3 },
+        );
+      },
+    });
+    hot.push({
+      key: "table",
+      x: 0,
+      z: -2,
+      r: 2.4,
+      html: () =>
+        S.phase === "day"
+          ? `<h4>The land map</h4><p>Lakshmanpur on paper. Plan today's work.</p><button id="hsb">Open the map</button>`
+          : `<h4>The land map</h4><p>Too dark to plan. Wait for morning.</p>`,
+      act: () => {
+        if (S.phase === "day") visitPanchayat();
+      },
+    });
+    hot.push({
+      key: "seat",
+      x: 0,
+      z: 3.4,
+      r: 1.9,
+      html: () =>
+        S.phase === "night" && !S.sabhaDone
+          ? `<h4>Night Sabha</h4><p>The village is seated. Take your place.</p><button id="hsb">Take your seat</button>`
+          : `<h4>The hall</h4><p>${S.phase === "night" ? "The meeting is over. Lamps burn low." : "Benches for the Gram Sabha. Every adult has a seat."}</p>`,
+      act: () => {
+        if (S.phase === "night" && !S.sabhaDone) nightSabha();
+      },
+    });
+    hot.push({
+      key: "board",
+      x: W_ / 2 - 1.3,
+      z: -1,
+      r: 1.9,
+      html: () =>
+        `<h4>Notice board</h4><p>${S.policies.length ? "Resolutions in force: " + S.policies.map((id) => POLICIES.find((p) => p.id === id).n).join(", ") + "." : "No resolutions yet. The Sabha meets every third morning."}</p>`,
+    });
+    const room = {
+      scene: sc,
+      W: W_,
+      D: D_,
+      solids,
+      hotspots: hot,
+      building: b,
+      name: "Panchayat Bhavan",
+    };
+    room.update = () => {
+      const night = S.phase === "night";
+      clerk.visible = !night;
+      const meeting = night && !S.sabhaDone;
+      seated.forEach((v) => (v.visible = meeting));
+      kamla.visible = meeting && S.rank < 2;
+    };
+    return room;
+  }
+  // houses: a bed, a shelf, a stove, a rug, water pots; bigger houses get a desk and a divan
+  const bx = -W_ / 2 + 1.6,
+    bz = -D_ / 2 + 1.9;
+  winAt(0, -D_ / 2 + 0.16, 0);
+  winAt(W_ / 2 - 0.16, -1, Math.PI / 2);
+  g.add(box(2.2, 0.5, 1.2, RM.wood2, bx, 0.3, bz));
+  g.add(box(2.1, 0.25, 1.1, own ? RM.cloth2 : RM.cloth, bx, 0.65, bz));
+  g.add(box(0.6, 0.2, 0.9, RM.paper, bx - 0.7, 0.85, bz));
+  solids.push(rect(bx, bz, 1.1, 0.6));
+  g.add(box(0.5, 1.6, 1.6, RM.wood, W_ / 2 - 0.45, 0.8, -2.4));
+  g.add(box(0.4, 0.3, 0.3, RM.clay, W_ / 2 - 0.45, 1.75, -2.6));
+  g.add(box(0.3, 0.25, 0.25, RM.paper, W_ / 2 - 0.45, 1.75, -2.1));
+  solids.push(rect(W_ / 2 - 0.45, -2.4, 0.3, 0.85));
+  const sx = W_ / 2 - 1.3,
+    sz = -D_ / 2 + 0.9;
+  g.add(box(1.2, 0.6, 1, RM.clay, sx, 0.3, sz));
+  g.add(box(0.6, 0.4, 0.6, RM.dark, sx, 0.8, sz));
+  solids.push(rect(sx, sz, 0.65, 0.55));
+  g.add(box(3, 0.04, 2, own ? RM.cloth : RM.green, 0.4, 0.02, 0.9));
+  g.add(box(0.7, 0.35, 0.7, RM.wood, 1.6, 0.18, -1));
+  solids.push(rect(1.6, -1, 0.38, 0.38));
+  g.add(box(0.5, 0.6, 0.5, RM.clay, -W_ / 2 + 1.2, 0.3, D_ / 2 - 1));
+  g.add(box(0.45, 0.5, 0.45, RM.clay, -W_ / 2 + 1.8, 0.25, D_ / 2 - 1));
+  bulb(0, 0);
+  if (type === "homeM" || type === "homeS") {
+    const dx = W_ / 2 - 2.6,
+      dz = -D_ / 2 + 2.4;
+    g.add(box(2.2, 0.1, 1, RM.wood2, dx, 0.9, dz));
+    for (const [a, c] of [
+      [-1, -0.4],
+      [1, -0.4],
+      [-1, 0.4],
+      [1, 0.4],
+    ])
+      g.add(box(0.12, 0.9, 0.12, RM.wood, dx + a, 0.45, dz + c));
+    g.add(box(0.6, 0.04, 0.4, RM.paper, dx - 0.3, 0.97, dz));
+    g.add(box(0.25, 0.35, 0.25, RM.brass, dx + 0.7, 1.1, dz - 0.2));
+    g.add(box(0.6, 0.1, 0.6, RM.wood, dx, 0.5, dz + 1.2));
+    solids.push(rect(dx, dz, 1.15, 0.55));
+    hot.push({
+      key: "desk",
+      x: dx,
+      z: dz + 1.4,
+      r: 1.6,
+      html: () =>
+        `<h4>Writing desk</h4><p>${own ? "Your papers as " + RANKS[S.rank].n + ". " + RANKS[S.rank].can : "Papers of the " + B[type].n.toLowerCase() + "."}</p>`,
+    });
+  }
+  if (type === "homeS") {
+    g.add(box(2.6, 0.5, 1.1, RM.wood2, -1.5, 0.3, D_ / 2 - 2.2));
+    g.add(box(2.5, 0.25, 1, RM.cloth3, -1.5, 0.65, D_ / 2 - 2.2));
+    solids.push(rect(-1.5, D_ / 2 - 2.2, 1.3, 0.55));
+    g.add(box(0.7, 0.9, 0.06, RM.wood, -3, 2.2, -D_ / 2 + 0.1));
+    g.add(box(0.55, 0.75, 0.02, RM.paper, -3, 2.2, -D_ / 2 + 0.14));
+    g.add(box(0.6, 0.3, 0.35, RM.dark, W_ / 2 - 0.45, 1.75, -1.8));
+  }
+  let name = "Your house";
+  const resident = own ? null : residentOf(b);
+  if (resident) {
+    name = resident.n + "'s house";
+    const rp = person(M.cloths[Math.abs(b.x * 7 + b.y) % 8], 0.85);
+    rp.position.set(0.8, 0, -0.4);
+    rp.rotation.y = Math.PI;
+    g.add(rp);
+    solids.push({ x: 0.8, z: -0.4, r: 0.6 });
+    hot.push({
+      key: "talk",
+      x: 0.8,
+      z: -0.4,
+      r: 2.4,
+      html: () =>
+        `<h4>${resident.n} <span class="tiny">(${resident.job})</span></h4><p>At home.</p><button id="hsb">Talk</button>`,
+      act: () => {
+        speak(resident, talkLine(resident), { x: 0.8, y: 1.9, z: -0.4 });
+      },
+    });
+  } else {
+    hot.push({
+      key: "bed",
+      x: bx + 0.4,
+      z: bz + 1,
+      r: 2,
+      html: () =>
+        S.phase === "night"
+          ? S.sabhaDone
+            ? `<h4>Your bed</h4><p>Sleep. The night passes; the village fends for itself.</p><button id="hsb">Sleep</button>`
+            : `<h4>Your bed</h4><p>Not yet. The Sabha is waiting at the Panchayat.</p>`
+          : `<h4>Your bed</h4><p>Not tired. The Panchayat is past the banyan.</p>`,
+      act: () => {
+        if (S.phase === "night" && S.sabhaDone) sleep(false);
+      },
+    });
+    hot.push({
+      key: "stove",
+      x: sx,
+      z: sz + 1.3,
+      r: 1.6,
+      html: () =>
+        `<h4>Stove</h4><p>${S.grain > 0 ? S.grain + " sacks of grain in the village store for tomorrow's rotis." : "The store is empty. People will go hungry at dawn."}</p>`,
+    });
+  }
+  const room = {
+    scene: sc,
+    W: W_,
+    D: D_,
+    solids,
+    hotspots: hot,
+    building: b,
+    name,
+  };
+  room.update = () => {};
+  return room;
+}
+const fadeEl = document.getElementById("fade"),
+  placeEl = document.getElementById("place");
+function fadeTo(fn) {
+  S.transition = true;
+  fadeEl.classList.add("on");
+  setTimeout(() => {
+    fn();
+    setTimeout(() => {
+      fadeEl.classList.remove("on");
+      S.transition = false;
+    }, 80);
+  }, 320);
+}
+function movePlayerTo(sc) {
+  if (playerMesh.parent) playerMesh.parent.remove(playerMesh);
+  sc.add(playerMesh);
+}
+function enterRoom(b) {
+  if (S.transition || S.scene !== "village") return;
+  closePrompt();
+  S.talking = null;
+  fadeTo(() => {
+    const r = roomFor(b);
+    S.scene = "interior";
+    S.room = r;
+    S.inside = { x: 0, z: r.D / 2 - 1.8, face: Math.PI };
+    S.player.jy = 0;
+    S.player.vy = 0;
+    movePlayerTo(r.scene);
+    S.player.moving = false;
+    cam.savedDist = cam.dist;
+    cam.savedPitch = cam.pitch;
+    cam.dist = 10;
+    cam.pitch = 0.68;
+    placeEl.textContent = r.name;
+    placeEl.classList.remove("hidden");
+  });
+}
+function leaveRoom(instant) {
+  if (S.scene !== "interior") return;
+  const go = () => {
+    const b = S.room.building;
+    S.scene = "village";
+    S.room = null;
+    S.talking = null;
+    S.player.x = b.x;
+    S.player.y = b.y + DOOR_OFF[b.id] + 6;
+    S.player.face = 0;
+    S.player.jy = 0;
+    S.player.vy = 0;
+    movePlayerTo(scene);
+    if (cam.savedDist) cam.dist = cam.savedDist;
+    if (cam.savedPitch !== undefined) cam.pitch = cam.savedPitch;
+    placeEl.classList.add("hidden");
+  };
+  closePrompt();
+  if (instant) go();
+  else fadeTo(go);
+}
+window.enterRoom = enterRoom;
+window.leaveRoom = leaveRoom;
+window.cam = cam;
+function draw() {
+  sync();
+  updateSpeech();
+  GameSystems.beforeRender.forEach((fn) => fn());
+  if (S.scene === "interior") {
+    S.room.update();
+    renderer.render(S.room.scene, camera);
+  } else renderer.render(scene, camera);
+}
+function step(sec) {
+  const n = Math.round(sec * 20);
+  for (let i = 0; i < n; i++) {
+    if (!S.paused) tick(0.05);
+  }
+  draw();
+}
+window.step = step;
+window.S = S;
+window.act = act;
+window.PLOTS = PLOTS;
+window.B = B;
+window.visitPanchayat = visitPanchayat;
+window.sleep = sleep;
+window.nightSabha = nightSabha;
+window.PANCH = PANCH;
+window.homeOf = () => HOME;
+window.DOOR_OFF = DOOR_OFF;
+window.VC = VC;
+window.moveHome = moveHome;
+window.pitchMin = pitchMin;
+window.talkLine = talkLine;
+let last = performance.now();
+let lastPausedDraw = -Infinity;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const elapsed = now - last;
+  const dt = Math.min(0.05, elapsed / 1000);
+  last = now;
+  if (window.GameRecovery?.failed) return;
+  window.GraphicsQuality?.sample(elapsed, now);
+  try {
+    if (document.hidden) return;
+    // Menus use a frozen world, with a low-frequency refresh for scene transitions.
+    if (S.paused) {
+      if (now - lastPausedDraw < 250) return;
+      lastPausedDraw = now;
+    } else {
+      lastPausedDraw = -Infinity;
+      tick(dt);
+    }
+    draw();
+  } catch (error) {
+    window.GameRecovery?.fail(error);
+  }
+}

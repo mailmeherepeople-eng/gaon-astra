@@ -1,3 +1,5 @@
+> Historical snapshot. For current behavior and release checks, start with [README.md](README.md). The September repair report supersedes implementation status in this document.
+
 # Whole-village polish and earned responsibility
 
 ## Implemented

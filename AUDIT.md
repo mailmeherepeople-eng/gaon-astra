@@ -1,3 +1,5 @@
+> Historical snapshot. For current behavior and release checks, start with [README.md](README.md). The September repair report supersedes implementation status in this document.
+
 # Gaon Astra: merge and visual audit
 
 Reviewed 5 September 2026. The user's final direction is **fun first; learning accumulates through play**.

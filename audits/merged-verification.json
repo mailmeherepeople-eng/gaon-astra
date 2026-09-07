@@ -1,0 +1,112 @@
+{
+  "desktop": {
+    "count": {
+      "revision": "128",
+      "total": 301,
+      "cullingOff": 301,
+      "visible": 301,
+      "canopies": 286,
+      "leafInstances": 600600,
+      "shadows": true,
+      "shadowSize": 4096
+    },
+    "state": {
+      "gardenVisible": false,
+      "gardenPosition": [
+        109,
+        0.006331080053365275,
+        81.5
+      ],
+      "hiddenBlockers": [
+        {
+          "position": [
+            125,
+            0,
+            90
+          ],
+          "name": ""
+        }
+      ]
+    },
+    "startBefore": {
+      "calls": 2133,
+      "triangles": 1593578
+    },
+    "startAfter": {
+      "calls": 1915,
+      "triangles": 611778
+    },
+    "pump": {
+      "calls": 1327,
+      "triangles": 1485058
+    }
+  },
+  "phone": {
+    "count": {
+      "revision": "128",
+      "total": 301,
+      "cullingOff": 301,
+      "visible": 301,
+      "canopies": 286,
+      "leafInstances": 200200,
+      "shadows": false,
+      "shadowSize": 1024
+    },
+    "state": {
+      "gardenVisible": false,
+      "gardenPosition": [
+        109,
+        0.006331080053365275,
+        81.5
+      ],
+      "hiddenBlockers": [
+        {
+          "position": [
+            125,
+            0,
+            90
+          ],
+          "name": ""
+        }
+      ]
+    },
+    "startBefore": {
+      "calls": 921,
+      "triangles": 624359
+    },
+    "startAfter": {
+      "calls": 654,
+      "triangles": 150759
+    },
+    "pump": {
+      "calls": 718,
+      "triangles": 614479
+    }
+  },
+  "shortDesktop": {
+    "x": -80,
+    "width": 440,
+    "right": 360,
+    "viewport": 900
+  },
+  "garden": {
+    "visible": false,
+    "jobExists": true
+  },
+  "gameOver": {
+    "before": 1,
+    "after": 1,
+    "happy": 0
+  },
+  "unstarted": {
+    "before": null,
+    "after": {
+      "saved": true,
+      "label": "Continue your village"
+    }
+  },
+  "frameErrors": {
+    "count": 51,
+    "visibleBanner": 0
+  }
+}

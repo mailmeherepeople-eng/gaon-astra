@@ -1,0 +1,28 @@
+{
+  "dialogue": {
+    "line": "Fever in three houses near the well. The health sub-centre is a State function; until then, send a message.",
+    "height": 104.28125,
+    "bottom": 172.28125,
+    "overlapJump": false
+  },
+  "incompleteSave": {
+    "errors": [],
+    "hasStart": 1
+  },
+  "population": {
+    "before": 15,
+    "pop": 14,
+    "agents": 15
+  },
+  "noticeboard": {
+    "prompt": "Your houseYour bed is inside.Enter",
+    "legacyNearby": false,
+    "legacyVisit": "undefined",
+    "visitCorner": false
+  },
+  "roles": {
+    "initialNareshAgent": false,
+    "initialKamlaAgent": false,
+    "initialPrakashAgent": true
+  }
+}

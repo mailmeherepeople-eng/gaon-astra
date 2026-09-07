@@ -1,3 +1,5 @@
+> Design backlog, not a list of implemented features. See [README.md](README.md) for current gameplay.
+
 # Make players want one more village day
 
 The strongest pitch is **a village life game where your neighbours remember you**. The reward for playing is a more interesting village: new people, funny incidents, beautiful places, useful tools and changes you can point to. Civics becomes the explanation for why the village responds.

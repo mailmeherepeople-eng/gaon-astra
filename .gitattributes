@@ -1,0 +1,6 @@
+# Asset version hashes must be identical on Windows, CI and GitHub Pages.
+*.js text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+vendor/three.min.js -diff linguist-generated=true

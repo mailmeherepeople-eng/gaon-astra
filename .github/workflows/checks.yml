@@ -1,0 +1,26 @@
+name: Game checks
+on: [push, pull_request]
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run complete game checks
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
+        run: |
+          python3 -m http.server 8773 > /tmp/gaon-http.log 2>&1 &
+          npm run test:all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: game-check-evidence
+          path: |
+            qa/
+            audits/repair-results.json

@@ -1,0 +1,177 @@
+{
+  "date": "2026-09-07T12:21:52.114Z",
+  "browser": "152.0.4191.66",
+  "note": "Headless desktop browser, not physical-phone frame times. 900 ms warm-up per scenario, 90 RAF samples.",
+  "results": [
+    {
+      "profile": "phone emulation",
+      "scenario": "start",
+      "medianMs": 6.900000000000091,
+      "p95Ms": 7,
+      "calls": 206,
+      "triangles": 94458,
+      "geometries": 254,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 9,
+        "pitch": 0.45,
+        "yaw": -0.12435499454676144
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "pump",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7,
+      "calls": 191,
+      "triangles": 93834,
+      "geometries": 254,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 7,
+        "pitch": 0.3,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "crowded",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7,
+      "calls": 459,
+      "triangles": 125427,
+      "geometries": 756,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "night",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7.099999999999454,
+      "calls": 297,
+      "triangles": 105205,
+      "geometries": 757,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "interior",
+      "medianMs": 6.900000000001455,
+      "p95Ms": 7,
+      "calls": 54,
+      "triangles": 3606,
+      "geometries": 783,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 10,
+        "pitch": 0.68,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "start",
+      "medianMs": 6.900000000000091,
+      "p95Ms": 7,
+      "calls": 1573,
+      "triangles": 390950,
+      "geometries": 917,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 9,
+        "pitch": 0.45,
+        "yaw": -0.12435499454676144
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "pump",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7,
+      "calls": 1423,
+      "triangles": 366822,
+      "geometries": 917,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 7,
+        "pitch": 0.3,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "crowded",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7,
+      "calls": 2193,
+      "triangles": 614171,
+      "geometries": 1018,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "night",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7,
+      "calls": 1574,
+      "triangles": 354601,
+      "geometries": 1019,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "interior",
+      "medianMs": 6.900000000001455,
+      "p95Ms": 7,
+      "calls": 110,
+      "triangles": 18754,
+      "geometries": 1045,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 10,
+        "pitch": 0.68,
+        "yaw": 0
+      }
+    }
+  ]
+}

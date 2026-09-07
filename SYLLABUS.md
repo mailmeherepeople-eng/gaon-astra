@@ -1,3 +1,5 @@
+> Historical snapshot. For current behavior and release checks, start with [README.md](README.md). The September repair report supersedes implementation status in this document.
+
 # Does Gaon cover the Class 6 syllabus?
 
 Short answer: no. Gaon covers two of the book's five themes, Governance and Democracy (chapters 9 to 12) and Economic Life Around Us (chapters 13 and 14), and inside those two it covers most concepts but not all. The other three themes need different chassis, listed at the end.

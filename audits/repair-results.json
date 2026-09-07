@@ -1,0 +1,47 @@
+{
+  "world": {
+    "garden": true,
+    "clipped": false,
+    "instances": 206,
+    "culled": true,
+    "revision": "185",
+    "names": [
+      "Kamla Devi",
+      "Naresh",
+      "Meera Devi",
+      "Hari Singh",
+      "Prakash",
+      "Pooja",
+      "Kishan",
+      "Bhola",
+      "Geeta Devi",
+      "Raju",
+      "Savitri",
+      "Lakshmi",
+      "Dinesh",
+      "Radha",
+      "Devi Lal"
+    ]
+  },
+  "save": {
+    "good": {
+      "ok": true,
+      "message": "Village saved on this browser."
+    },
+    "failure": {
+      "ok": false,
+      "message": "Could not save on this browser. Export a backup in Settings."
+    },
+    "exportable": true
+  },
+  "quality": {
+    "high": 1,
+    "low": 1,
+    "shadows": false,
+    "level": 1
+  },
+  "carry": {
+    "before": 938,
+    "after": 938
+  }
+}

@@ -1,153 +1,1524 @@
 /* Gaon Astra whole-village art. Locally authored meshes and material maps.
    No network assets; existing village simulation and interaction IDs are retained. */
 (() => {
-  'use strict';
-  const T=THREE;
-  for(const o of scene.children){if(o.position.x>98&&o.position.x<124&&o.position.z>71&&o.position.z<95){let vegetation=false;o.traverse(m=>{if(m.geometry&&m.geometry.type==='DodecahedronGeometry')vegetation=true;});if(vegetation)o.visible=false;}}
-  const corner=new T.Group();corner.name='Village art and environment';scene.add(corner);
-  let seed=73191;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-  const range=(a,b)=>a+random()*(b-a), color=h=>new T.Color(h).convertSRGBToLinear();
-  const material=(h,opts={})=>new T.MeshStandardMaterial({color:color(h),roughness:.91,metalness:0,...opts});
-  function texture(kind,size=512){
-    const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');
-    const colours={plaster:[197,179,145],earth:[132,111,81],wood:[90,63,40],cloth:[230,223,201],stone:[153,149,134],bark:[103,94,71]};
-    const rgb=colours[kind]||colours.stone,im=x.createImageData(size,size);
-    for(let y=0;y<size;y++)for(let j=0;j<size;j++){const i=(y*size+j)*4;let n=(random()-.5)*27+Math.sin(j*.062+Math.sin(y*.031)*2)*3+Math.sin(y*.097)*3;
-      if(kind==='wood'||kind==='bark')n+=Math.sin(j*.31+Math.sin(y*.026)*2)*13+Math.sin(j*1.12+y*.013)*5;
-      if(kind==='cloth')n=(j%3===0?-13:0)+(y%3===0?-10:0)+(random()-.5)*9;
-      for(let k=0;k<3;k++)im.data[i+k]=Math.max(0,Math.min(255,rgb[k]+n));im.data[i+3]=255;}
-    x.putImageData(im,0,0);
-    if(kind==='plaster'){for(let i=0;i<90;i++){x.fillStyle=`rgba(74,63,42,${range(.02,.08)})`;x.beginPath();x.ellipse(range(0,size),range(0,size),range(2,25),range(1,8),random()*6.3,0,7);x.fill();}for(let i=0;i<9;i++){x.strokeStyle='#62573c30';x.lineWidth=.6;x.beginPath();let px=random()*size,py=random()*size;x.moveTo(px,py);for(let j=0;j<5;j++){px+=range(-12,12);py+=range(3,12);x.lineTo(px,py);}x.stroke();}}
-    if(kind==='earth'){for(let i=0;i<2500;i++){x.fillStyle=i%2?'#3f372c65':'#d0ba9140';x.beginPath();x.ellipse(random()*size,random()*size,range(.4,2),range(.3,1),random()*6,0,7);x.fill();}}
-    const map=new T.CanvasTexture(c);map.wrapS=map.wrapT=T.RepeatWrapping;map.encoding=T.sRGBEncoding;map.anisotropy=Math.min(mobileGraphics?2:8,renderer.capabilities.getMaxAnisotropy());return map;
+  "use strict";
+  const T = THREE;
+  for (const o of scene.children) {
+    if (
+      o.userData.kind === "tree" &&
+      o.position.x > 98 &&
+      o.position.x < 124 &&
+      o.position.z > 71 &&
+      o.position.z < 95
+    ) {
+      let vegetation = false;
+      o.traverse((m) => {
+        if (m.geometry && m.geometry.type === "DodecahedronGeometry")
+          vegetation = true;
+      });
+      if (vegetation) o.visible = false;
+    }
   }
-  const maps={};for(const k of ['plaster','earth','wood','cloth','stone','bark'])maps[k]=texture(k);
-  function textured(h,kind,opts={}){const map=maps[kind];return material(h,{map,bumpMap:map,bumpScale:kind==='plaster'?.027:.012,...opts});}
-  const P={plaster:textured(0xffffff,'plaster'),lime:textured(0xf0e8ca,'plaster'),earth:textured(0xffffff,'earth'),wood:textured(0xffffff,'wood'),darkWood:textured(0x897760,'wood'),stone:textured(0xffffff,'stone'),bark:textured(0xffffff,'bark'),brick:material(0x925737),mortar:material(0xa19477),iron:material(0x434942,{metalness:.65,roughness:.67}),pump:material(0x486a60,{metalness:.55,roughness:.63}),rust:material(0x8c5232),steel:material(0x92998f,{metalness:.78,roughness:.38}),water:material(0x617d70,{roughness:.16,metalness:.28,transparent:true,opacity:.65}),leaf:material(0x5f7638),shadow:null};
-  const sphere=new T.SphereGeometry(1,mobileGraphics?12:20,mobileGraphics?8:14),cube=new T.BoxGeometry(1,1,1);
-  function mesh(geo,mat,parent,pos=[0,0,0],scale=[1,1,1]){const m=new T.Mesh(geo,mat);m.position.set(...pos);m.scale.set(...scale);m.castShadow=true;m.receiveShadow=true;if(parent)parent.add(m);return m;}
-  const boxAt=(parent,mat,x,y,z,w,h,d)=>mesh(cube,mat,parent,[x,y,z],[w,h,d]);
-  const oval=(parent,mat,x,y,z,w,h,d)=>mesh(sphere,mat,parent,[x,y,z],[w,h,d]);
-  function rod(parent,a,b,r1,r2,mat,segments=12){const start=new T.Vector3(...a),end=new T.Vector3(...b),v=end.clone().sub(start);const m=mesh(new T.CylinderGeometry(r2,r1,v.length(),segments),mat,parent,start.clone().add(end).multiplyScalar(.5).toArray());m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),v.normalize());return m;}
-  function tube(parent,points,r,mat){const curve=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));return mesh(new T.TubeGeometry(curve,18,r,8,false),mat,parent);}
-  const soft=document.createElement('canvas');soft.width=soft.height=128;{const x=soft.getContext('2d'),g=x.createRadialGradient(64,64,1,64,64,64);g.addColorStop(0,'rgba(28,24,16,.42)');g.addColorStop(.4,'rgba(28,24,16,.24)');g.addColorStop(1,'rgba(28,24,16,0)');x.fillStyle=g;x.fillRect(0,0,128,128);}
-  P.shadow=new T.MeshBasicMaterial({map:new T.CanvasTexture(soft),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
-  function shadow(x,z,w,d){const m=mesh(new T.PlaneGeometry(w,d),P.shadow,corner,[x,groundY(x,z)+.055,z]);m.rotation.x=-Math.PI/2;m.castShadow=false;m.renderOrder=2;return m;}
+  const corner = new T.Group();
+  corner.name = "Village art and environment";
+  scene.add(corner);
+  let seed = 73191;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const range = (a, b) => a + random() * (b - a),
+    color = (h) => new T.Color(h).convertSRGBToLinear();
+  const materialCache = new Map();
+  const material = (h, opts = {}) => {
+    if (Object.keys(opts).length)
+      return new T.MeshStandardMaterial({
+        color: color(h),
+        roughness: 0.91,
+        metalness: 0,
+        ...opts,
+      });
+    if (!materialCache.has(h))
+      materialCache.set(
+        h,
+        new T.MeshStandardMaterial({
+          color: color(h),
+          roughness: 0.91,
+          metalness: 0,
+        }),
+      );
+    return materialCache.get(h);
+  };
+  function texture(kind, size = 512) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const x = c.getContext("2d");
+    const colours = {
+      plaster: [197, 179, 145],
+      earth: [132, 111, 81],
+      wood: [90, 63, 40],
+      cloth: [230, 223, 201],
+      stone: [153, 149, 134],
+      bark: [103, 94, 71],
+    };
+    const rgb = colours[kind] || colours.stone,
+      im = x.createImageData(size, size);
+    for (let y = 0; y < size; y++)
+      for (let j = 0; j < size; j++) {
+        const i = (y * size + j) * 4;
+        let n =
+          (random() - 0.5) * 27 +
+          Math.sin(j * 0.062 + Math.sin(y * 0.031) * 2) * 3 +
+          Math.sin(y * 0.097) * 3;
+        if (kind === "wood" || kind === "bark")
+          n +=
+            Math.sin(j * 0.31 + Math.sin(y * 0.026) * 2) * 13 +
+            Math.sin(j * 1.12 + y * 0.013) * 5;
+        if (kind === "cloth")
+          n =
+            (j % 3 === 0 ? -13 : 0) +
+            (y % 3 === 0 ? -10 : 0) +
+            (random() - 0.5) * 9;
+        for (let k = 0; k < 3; k++)
+          im.data[i + k] = Math.max(0, Math.min(255, rgb[k] + n));
+        im.data[i + 3] = 255;
+      }
+    x.putImageData(im, 0, 0);
+    if (kind === "plaster") {
+      for (let i = 0; i < 90; i++) {
+        x.fillStyle = `rgba(74,63,42,${range(0.02, 0.08)})`;
+        x.beginPath();
+        x.ellipse(
+          range(0, size),
+          range(0, size),
+          range(2, 25),
+          range(1, 8),
+          random() * 6.3,
+          0,
+          7,
+        );
+        x.fill();
+      }
+      for (let i = 0; i < 9; i++) {
+        x.strokeStyle = "#62573c30";
+        x.lineWidth = 0.6;
+        x.beginPath();
+        let px = random() * size,
+          py = random() * size;
+        x.moveTo(px, py);
+        for (let j = 0; j < 5; j++) {
+          px += range(-12, 12);
+          py += range(3, 12);
+          x.lineTo(px, py);
+        }
+        x.stroke();
+      }
+    }
+    if (kind === "earth") {
+      for (let i = 0; i < 2500; i++) {
+        x.fillStyle = i % 2 ? "#3f372c65" : "#d0ba9140";
+        x.beginPath();
+        x.ellipse(
+          random() * size,
+          random() * size,
+          range(0.4, 2),
+          range(0.3, 1),
+          random() * 6,
+          0,
+          7,
+        );
+        x.fill();
+      }
+    }
+    const map = new T.CanvasTexture(c);
+    map.wrapS = map.wrapT = T.RepeatWrapping;
+    map.colorSpace = T.SRGBColorSpace;
+    map.anisotropy = Math.min(
+      mobileGraphics ? 2 : 8,
+      renderer.capabilities.getMaxAnisotropy(),
+    );
+    return map;
+  }
+  const maps = {};
+  for (const k of ["plaster", "earth", "wood", "cloth", "stone", "bark"])
+    maps[k] = texture(k);
+  function textured(h, kind, opts = {}) {
+    const map = maps[kind];
+    return material(h, {
+      map,
+      bumpMap: map,
+      bumpScale: kind === "plaster" ? 0.027 : 0.012,
+      ...opts,
+    });
+  }
+  const P = {
+    plaster: textured(0xffffff, "plaster"),
+    lime: textured(0xf0e8ca, "plaster"),
+    earth: textured(0xffffff, "earth"),
+    wood: textured(0xffffff, "wood"),
+    darkWood: textured(0x897760, "wood"),
+    stone: textured(0xffffff, "stone"),
+    bark: textured(0xffffff, "bark"),
+    brick: material(0x925737),
+    mortar: material(0xa19477),
+    iron: material(0x434942, { metalness: 0.65, roughness: 0.67 }),
+    pump: material(0x486a60, { metalness: 0.55, roughness: 0.63 }),
+    rust: material(0x8c5232),
+    steel: material(0x92998f, { metalness: 0.78, roughness: 0.38 }),
+    water: material(0x617d70, {
+      roughness: 0.16,
+      metalness: 0.28,
+      transparent: true,
+      opacity: 0.65,
+    }),
+    leaf: material(0x5f7638),
+    shadow: null,
+  };
+  const sphere = new T.SphereGeometry(
+      1,
+      mobileGraphics ? 12 : 20,
+      mobileGraphics ? 8 : 14,
+    ),
+    cube = new T.BoxGeometry(1, 1, 1);
+  function mesh(geo, mat, parent, pos = [0, 0, 0], scale = [1, 1, 1]) {
+    const m = new T.Mesh(geo, mat);
+    m.position.set(...pos);
+    m.scale.set(...scale);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    if (parent) parent.add(m);
+    return m;
+  }
+  const boxAt = (parent, mat, x, y, z, w, h, d) =>
+    mesh(cube, mat, parent, [x, y, z], [w, h, d]);
+  const oval = (parent, mat, x, y, z, w, h, d) =>
+    mesh(sphere, mat, parent, [x, y, z], [w, h, d]);
+  function rod(parent, a, b, r1, r2, mat, segments = 12) {
+    const start = new T.Vector3(...a),
+      end = new T.Vector3(...b),
+      v = end.clone().sub(start);
+    const m = mesh(
+      new T.CylinderGeometry(r2, r1, v.length(), segments),
+      mat,
+      parent,
+      start.clone().add(end).multiplyScalar(0.5).toArray(),
+    );
+    m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), v.normalize());
+    return m;
+  }
+  function tube(parent, points, r, mat) {
+    const curve = new T.CatmullRomCurve3(
+      points.map((p) => new T.Vector3(...p)),
+    );
+    return mesh(new T.TubeGeometry(curve, 18, r, 8, false), mat, parent);
+  }
+  const soft = document.createElement("canvas");
+  soft.width = soft.height = 128;
+  {
+    const x = soft.getContext("2d"),
+      g = x.createRadialGradient(64, 64, 1, 64, 64, 64);
+    g.addColorStop(0, "rgba(28,24,16,.42)");
+    g.addColorStop(0.4, "rgba(28,24,16,.24)");
+    g.addColorStop(1, "rgba(28,24,16,0)");
+    x.fillStyle = g;
+    x.fillRect(0, 0, 128, 128);
+  }
+  P.shadow = new T.MeshBasicMaterial({
+    map: new T.CanvasTexture(soft),
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  });
+  function shadow(x, z, w, d) {
+    const m = mesh(new T.PlaneGeometry(w, d), P.shadow, corner, [
+      x,
+      groundY(x, z) + 0.055,
+      z,
+    ]);
+    m.rotation.x = -Math.PI / 2;
+    m.castShadow = false;
+    m.renderOrder = 2;
+    return m;
+  }
 
   // A shaped patch of earth: stone, compacted paths, wet edges and fading boundaries.
-  const terrain=new T.PlaneGeometry(29,27,64,64);terrain.rotateX(-Math.PI/2);const pos=terrain.attributes.position,cols=[];
-  for(let i=0;i<pos.count;i++){const x=pos.getX(i)+111,z=pos.getZ(i)+82;pos.setXYZ(i,x,groundY(x,z)+.12,z);let tint=new T.Color(1,1,1);const pumpD=Math.hypot(x-114,z-76);if(pumpD<2.2)tint.multiplyScalar(.68+.32*pumpD/2.2);cols.push(tint.r,tint.g,tint.b);}
-  terrain.setAttribute('color',new T.Float32BufferAttribute(cols,3));terrain.computeVertexNormals();
-  const fade=document.createElement('canvas');fade.width=fade.height=256;{const x=fade.getContext('2d'),g=x.createRadialGradient(128,128,70,128,128,128);g.addColorStop(0,'white');g.addColorStop(1,'black');x.fillStyle=g;x.fillRect(0,0,256,256);}
-  const dirtMap=maps.earth.clone();dirtMap.needsUpdate=true;dirtMap.repeat.set(9,9);const groundMaterial=material(0xffffff,{map:dirtMap,bumpMap:dirtMap,bumpScale:.028,alphaMap:new T.CanvasTexture(fade),transparent:true,depthWrite:false,vertexColors:true});
-  groundMaterial.onBeforeCompile=shader=>{shader.vertexShader='varying vec2 cornerUV;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\ncornerUV=uv;');shader.fragmentShader='varying vec2 cornerUV;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <alphamap_fragment>','diffuseColor.a *= texture2D(alphaMap, cornerUV).g;');};
-  const ground=mesh(terrain,groundMaterial,corner);ground.castShadow=false;ground.renderOrder=1;
+  const terrain = new T.PlaneGeometry(29, 27, 64, 64);
+  terrain.rotateX(-Math.PI / 2);
+  const pos = terrain.attributes.position,
+    cols = [];
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) + 111,
+      z = pos.getZ(i) + 82;
+    pos.setXYZ(i, x, groundY(x, z) + 0.12, z);
+    let tint = new T.Color(1, 1, 1);
+    const pumpD = Math.hypot(x - 114, z - 76);
+    if (pumpD < 2.2) tint.multiplyScalar(0.68 + (0.32 * pumpD) / 2.2);
+    cols.push(tint.r, tint.g, tint.b);
+  }
+  terrain.setAttribute("color", new T.Float32BufferAttribute(cols, 3));
+  terrain.computeVertexNormals();
+  const fade = document.createElement("canvas");
+  fade.width = fade.height = 256;
+  {
+    const x = fade.getContext("2d"),
+      g = x.createRadialGradient(128, 128, 70, 128, 128, 128);
+    g.addColorStop(0, "white");
+    g.addColorStop(1, "black");
+    x.fillStyle = g;
+    x.fillRect(0, 0, 256, 256);
+  }
+  const dirtMap = maps.earth.clone();
+  dirtMap.needsUpdate = true;
+  dirtMap.repeat.set(9, 9);
+  const groundMaterial = material(0xffffff, {
+    map: dirtMap,
+    bumpMap: dirtMap,
+    bumpScale: 0.028,
+    alphaMap: new T.CanvasTexture(fade),
+    transparent: true,
+    depthWrite: false,
+    vertexColors: true,
+  });
+  groundMaterial.onBeforeCompile = (shader) => {
+    shader.vertexShader = "varying vec2 cornerUV;\n" + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <uv_vertex>",
+      "#include <uv_vertex>\ncornerUV=uv;",
+    );
+    shader.fragmentShader = "varying vec2 cornerUV;\n" + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <alphamap_fragment>",
+      "diffuseColor.a *= texture2D(alphaMap, cornerUV).g;",
+    );
+  };
+  const ground = mesh(terrain, groundMaterial, corner);
+  ground.castShadow = false;
+  ground.renderOrder = 1;
 
-  function clayPot(parent,x,y,z,s=1){const points=[[.13,0],[.22,.04],[.30,.21],[.29,.36],[.17,.49],[.13,.51],[.13,.56],[.16,.57]].map(p=>new T.Vector2(p[0]*s,p[1]*s));const pot=mesh(new T.LatheGeometry(points,24),material(0xaa603f,{roughness:.94}),parent,[x,y,z]);mesh(new T.TorusGeometry(.145*s,.018*s,8,24),P.brick,parent,[x,y+.56*s,z]).rotation.x=Math.PI/2;return pot;}
-  function windowAt(g,x,z,side=false){const w=new T.Group();w.position.set(x,1.72,z);if(side)w.rotation.y=Math.PI/2;g.add(w);boxAt(w,P.darkWood,0,0,-.03,.9,.91,.17);boxAt(w,material(0x171f19),0,0,.065,.71,.70,.025);
-    for(const a of [-.42,.42])boxAt(w,P.wood,a,0,.11,.095,.92,.14);for(const a of [-.40,.40])boxAt(w,P.wood,0,a,.11,.91,.1,.14);for(let i=-2;i<=2;i++)boxAt(w,P.iron,i*.13,0,.12,.025,.68,.025);boxAt(w,P.iron,0,0,.13,.68,.025,.025);
-    for(const side of [-1,1]){const sh=new T.Group();sh.position.set(side*.49,0,.10);sh.rotation.y=side*.30;w.add(sh);boxAt(sh,textured(0x7c9887,'wood'),side*.19,0,0,.38,.76,.055);for(let j=-2;j<=2;j++)boxAt(sh,P.wood,side*.19,j*.14,.035,.36,.028,.025);}}
-  function detailedHouse(){const g=new T.Group();g.name='Limewashed courtyard house';boxAt(g,P.stone,0,.10,0,4.9,.20,4.75);boxAt(g,P.plaster,-1.49,1.40,2.21,1.82,2.6,.22);boxAt(g,P.plaster,1.49,1.40,2.21,1.82,2.6,.22);boxAt(g,P.plaster,0,2.45,2.21,1.16,.5,.22);boxAt(g,P.plaster,0,1.4,-2.2,4.8,2.6,.20);boxAt(g,P.plaster,-2.30,1.4,0,.20,2.6,4.4);boxAt(g,P.plaster,2.30,1.4,0,.20,2.6,4.4);
+  function clayPot(parent, x, y, z, s = 1) {
+    const points = [
+      [0.13, 0],
+      [0.22, 0.04],
+      [0.3, 0.21],
+      [0.29, 0.36],
+      [0.17, 0.49],
+      [0.13, 0.51],
+      [0.13, 0.56],
+      [0.16, 0.57],
+    ].map((p) => new T.Vector2(p[0] * s, p[1] * s));
+    const pot = mesh(
+      new T.LatheGeometry(points, 24),
+      material(0xaa603f, { roughness: 0.94 }),
+      parent,
+      [x, y, z],
+    );
+    mesh(new T.TorusGeometry(0.145 * s, 0.018 * s, 8, 24), P.brick, parent, [
+      x,
+      y + 0.56 * s,
+      z,
+    ]).rotation.x = Math.PI / 2;
+    return pot;
+  }
+  function windowAt(g, x, z, side = false) {
+    const w = new T.Group();
+    w.position.set(x, 1.72, z);
+    if (side) w.rotation.y = Math.PI / 2;
+    g.add(w);
+    boxAt(w, P.darkWood, 0, 0, -0.03, 0.9, 0.91, 0.17);
+    boxAt(w, material(0x171f19), 0, 0, 0.065, 0.71, 0.7, 0.025);
+    for (const a of [-0.42, 0.42])
+      boxAt(w, P.wood, a, 0, 0.11, 0.095, 0.92, 0.14);
+    for (const a of [-0.4, 0.4]) boxAt(w, P.wood, 0, a, 0.11, 0.91, 0.1, 0.14);
+    for (let i = -2; i <= 2; i++)
+      boxAt(w, P.iron, i * 0.13, 0, 0.12, 0.025, 0.68, 0.025);
+    boxAt(w, P.iron, 0, 0, 0.13, 0.68, 0.025, 0.025);
+    for (const side of [-1, 1]) {
+      const sh = new T.Group();
+      sh.position.set(side * 0.49, 0, 0.1);
+      sh.rotation.y = side * 0.3;
+      w.add(sh);
+      boxAt(
+        sh,
+        textured(0x7c9887, "wood"),
+        side * 0.19,
+        0,
+        0,
+        0.38,
+        0.76,
+        0.055,
+      );
+      for (let j = -2; j <= 2; j++)
+        boxAt(sh, P.wood, side * 0.19, j * 0.14, 0.035, 0.36, 0.028, 0.025);
+    }
+  }
+  function detailedHouse() {
+    const g = new T.Group();
+    g.name = "Limewashed courtyard house";
+    boxAt(g, P.stone, 0, 0.1, 0, 4.9, 0.2, 4.75);
+    boxAt(g, P.plaster, -1.49, 1.4, 2.21, 1.82, 2.6, 0.22);
+    boxAt(g, P.plaster, 1.49, 1.4, 2.21, 1.82, 2.6, 0.22);
+    boxAt(g, P.plaster, 0, 2.45, 2.21, 1.16, 0.5, 0.22);
+    boxAt(g, P.plaster, 0, 1.4, -2.2, 4.8, 2.6, 0.2);
+    boxAt(g, P.plaster, -2.3, 1.4, 0, 0.2, 2.6, 4.4);
+    boxAt(g, P.plaster, 2.3, 1.4, 0, 0.2, 2.6, 4.4);
     // Exposed brick below the plaster, with irregular interrupted courses.
-    for(let row=0;row<3;row++)for(let j=0;j<17;j++){const x=-2.26+j*.275+(row%2)*.135;if(Math.abs(x)<.64||x>2.3)continue;boxAt(g,P.brick,x,.23+row*.12,2.34,.255,.095,.045);}
-    boxAt(g,material(0x25241d),0,1.15,2.17,1.08,2,.05);for(const x of [-.6,.6])boxAt(g,P.wood,x,1.15,2.36,.11,2.1,.19);boxAt(g,P.wood,0,2.18,2.35,1.32,.15,.20);
-    for(let j=0;j<6;j++)boxAt(g,P.wood,-.44+j*.175,1.13,2.235,.163,1.91,.05);for(const y of [.46,1.64])boxAt(g,P.darkWood,0,y,2.29,1.02,.105,.055);boxAt(g,P.iron,.32,1.18,2.31,.055,.20,.035);
-    boxAt(g,P.stone,0,.075,2.72,1.45,.15,.8);boxAt(g,P.stone,0,.035,3.18,1.7,.07,.32);windowAt(g,-1.52,2.35);windowAt(g,2.41,-.45,true);
+    for (let row = 0; row < 3; row++)
+      for (let j = 0; j < 17; j++) {
+        const x = -2.26 + j * 0.275 + (row % 2) * 0.135;
+        if (Math.abs(x) < 0.64 || x > 2.3) continue;
+        boxAt(g, P.brick, x, 0.23 + row * 0.12, 2.34, 0.255, 0.095, 0.045);
+      }
+    boxAt(g, material(0x25241d), 0, 1.15, 2.17, 1.08, 2, 0.05);
+    for (const x of [-0.6, 0.6])
+      boxAt(g, P.wood, x, 1.15, 2.36, 0.11, 2.1, 0.19);
+    boxAt(g, P.wood, 0, 2.18, 2.35, 1.32, 0.15, 0.2);
+    for (let j = 0; j < 6; j++)
+      boxAt(g, P.wood, -0.44 + j * 0.175, 1.13, 2.235, 0.163, 1.91, 0.05);
+    for (const y of [0.46, 1.64])
+      boxAt(g, P.darkWood, 0, y, 2.29, 1.02, 0.105, 0.055);
+    boxAt(g, P.iron, 0.32, 1.18, 2.31, 0.055, 0.2, 0.035);
+    boxAt(g, P.stone, 0, 0.075, 2.72, 1.45, 0.15, 0.8);
+    boxAt(g, P.stone, 0, 0.035, 3.18, 1.7, 0.07, 0.32);
+    windowAt(g, -1.52, 2.35);
+    windowAt(g, 2.41, -0.45, true);
     // Gables and timber roof structure; the tile mesh is batched below.
-    for(const z of [-2.2,2.2]){const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute([-2.4,2.7,z,2.4,2.7,z,0,3.95,z],3));geo.computeVertexNormals();mesh(geo,material(0xc3b08c,{map:maps.plaster,side:T.DoubleSide}),g);}
-    for(const z of [-2.55,2.55]){rod(g,[-2.8,2.63,z],[0,4.06,z],.065,.065,P.wood);rod(g,[0,4.06,z],[2.8,2.63,z],.065,.065,P.wood);}
-    for(const x of [-2.7,0,2.7])rod(g,[x,x===0?4:2.68,-2.65],[x,x===0?4:2.68,2.65],.07,.07,P.wood);
+    for (const z of [-2.2, 2.2]) {
+      const geo = new T.BufferGeometry();
+      geo.setAttribute(
+        "position",
+        new T.Float32BufferAttribute(
+          [-2.4, 2.7, z, 2.4, 2.7, z, 0, 3.95, z],
+          3,
+        ),
+      );
+      geo.computeVertexNormals();
+      mesh(
+        geo,
+        material(0xc3b08c, { map: maps.plaster, side: T.DoubleSide }),
+        g,
+      );
+    }
+    for (const z of [-2.55, 2.55]) {
+      rod(g, [-2.8, 2.63, z], [0, 4.06, z], 0.065, 0.065, P.wood);
+      rod(g, [0, 4.06, z], [2.8, 2.63, z], 0.065, 0.065, P.wood);
+    }
+    for (const x of [-2.7, 0, 2.7])
+      rod(
+        g,
+        [x, x === 0 ? 4 : 2.68, -2.65],
+        [x, x === 0 ? 4 : 2.68, 2.65],
+        0.07,
+        0.07,
+        P.wood,
+      );
     // Curved overlapping khaprail tiles, not a flat pyramid or printed roof.
-    const p=[],uv=[],idx=[];for(let l=0;l<2;l++)for(let j=0;j<=8;j++){const a=j/8*Math.PI;p.push(l*.49,Math.sin(a)*.10,Math.cos(a)*.105);uv.push(l,j/8);}for(let j=0;j<8;j++){const a=j,b=j+1,c=j+9,d=j+10;idx.push(a,c,b,b,c,d);}const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(p,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(idx);geo.computeVertexNormals();
-    const tiles=new T.InstancedMesh(geo,material(0xb7734f,{roughness:.93,side:T.DoubleSide}),2*7*25);const dummy=new T.Object3D();let k=0;for(const side of [-1,1])for(let row=0;row<7;row++)for(let col=0;col<25;col++){dummy.position.set(side*row*.395,4.02-row*.201,-2.55+col*.213);dummy.rotation.set(0,side<0?Math.PI:0,-.47);dummy.updateMatrix();tiles.setMatrixAt(k,dummy.matrix);tiles.setColorAt(k++,new T.Color().setHSL(range(.035,.067),range(.23,.38),range(.48,.68)));}tiles.castShadow=true;tiles.receiveShadow=true;g.add(tiles);
+    const p = [],
+      uv = [],
+      idx = [];
+    for (let l = 0; l < 2; l++)
+      for (let j = 0; j <= 8; j++) {
+        const a = (j / 8) * Math.PI;
+        p.push(l * 0.49, Math.sin(a) * 0.1, Math.cos(a) * 0.105);
+        uv.push(l, j / 8);
+      }
+    for (let j = 0; j < 8; j++) {
+      const a = j,
+        b = j + 1,
+        c = j + 9,
+        d = j + 10;
+      idx.push(a, c, b, b, c, d);
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute("position", new T.Float32BufferAttribute(p, 3));
+    geo.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const tiles = new T.InstancedMesh(
+      geo,
+      material(0xb7734f, { roughness: 0.93, side: T.DoubleSide }),
+      2 * 7 * 25,
+    );
+    const dummy = new T.Object3D();
+    let k = 0;
+    for (const side of [-1, 1])
+      for (let row = 0; row < 7; row++)
+        for (let col = 0; col < 25; col++) {
+          dummy.position.set(
+            side * row * 0.395,
+            4.02 - row * 0.201,
+            -2.55 + col * 0.213,
+          );
+          dummy.rotation.set(0, side < 0 ? Math.PI : 0, -0.47);
+          dummy.updateMatrix();
+          tiles.setMatrixAt(k, dummy.matrix);
+          tiles.setColorAt(
+            k++,
+            new T.Color().setHSL(
+              range(0.035, 0.067),
+              range(0.23, 0.38),
+              range(0.48, 0.68),
+            ),
+          );
+        }
+    tiles.castShadow = true;
+    tiles.receiveShadow = true;
+    g.add(tiles);
     // Small shaded veranda: bamboo uprights and a timber shade with woven mat.
-    for(const x of [-2.08,2.08])rod(g,[x,.12,3.18],[x,2.48,3.18],.052,.041,P.wood);rod(g,[-2.18,2.48,3.18],[2.18,2.48,3.18],.055,.055,P.wood);
-    for(let i=0;i<18;i++)rod(g,[-2.2+i*.26,2.65,2.3],[-2.2+i*.26,2.48,3.25],.016,.016,P.wood,6);
-    clayPot(g,2.7,0,2.15,1);clayPot(g,2.9,0,2.7,.72);
+    for (const x of [-2.08, 2.08])
+      rod(g, [x, 0.12, 3.18], [x, 2.48, 3.18], 0.052, 0.041, P.wood);
+    rod(g, [-2.18, 2.48, 3.18], [2.18, 2.48, 3.18], 0.055, 0.055, P.wood);
+    for (let i = 0; i < 18; i++)
+      rod(
+        g,
+        [-2.2 + i * 0.26, 2.65, 2.3],
+        [-2.2 + i * 0.26, 2.48, 3.25],
+        0.016,
+        0.016,
+        P.wood,
+        6,
+      );
+    clayPot(g, 2.7, 0, 2.15, 1);
+    clayPot(g, 2.9, 0, 2.7, 0.72);
     return batchStatic(g);
   }
   // Merge static detail by material: preserve tile instancing, reduce scene traversal and draw calls.
-  function batchStatic(g){g.updateMatrixWorld(true);const batches=new Map(),remove=[];g.traverse(m=>{if(!m.isMesh||m.isInstancedMesh||Array.isArray(m.material))return;const geo=m.geometry.index?m.geometry.toNonIndexed():m.geometry.clone();geo.applyMatrix4(m.matrixWorld);if(!geo.attributes.normal)geo.computeVertexNormals();if(!geo.attributes.uv)geo.setAttribute('uv',new T.BufferAttribute(new Float32Array(geo.attributes.position.count*2),2));let list=batches.get(m.material);if(!list)batches.set(m.material,list=[]);list.push(geo);remove.push(m);});remove.forEach(m=>m.parent.remove(m));for(const [mat,list] of batches){const geo=new T.BufferGeometry();for(const [name,size] of [['position',3],['normal',3],['uv',2]]){const data=new Float32Array(list.reduce((n,g)=>n+g.attributes[name].array.length,0));let at=0;for(const g of list){data.set(g.attributes[name].array,at);at+=g.attributes[name].array.length;}geo.setAttribute(name,new T.BufferAttribute(data,size));}mesh(geo,mat,g);list.forEach(g=>g.dispose());}return g;}
-  function field(){const g=new T.Group();boxAt(g,P.earth,0,.04,0,6.1,.08,4.9);const stalkGeo=new T.CylinderGeometry(.009,.018,.67,5),earGeo=new T.SphereGeometry(.065,7,5);earGeo.scale(.65,2.7,.65);const stems=new T.InstancedMesh(stalkGeo,material(0xb7ad63),500),ears=new T.InstancedMesh(earGeo,material(0xc9ad62),500),d=new T.Object3D();for(let i=0;i<500;i++){const x=range(-2.8,2.8),z=range(-2.15,2.15),h=range(.75,1.15);d.position.set(x,.36*h,z);d.rotation.set(range(-.1,.1),0,range(-.07,.07));d.scale.set(1,h,1);d.updateMatrix();stems.setMatrixAt(i,d.matrix);d.position.y=.75*h;d.updateMatrix();ears.setMatrixAt(i,d.matrix);}stems.castShadow=ears.castShadow=true;g.add(stems,ears);for(const z of [-2.5,2.5])boxAt(g,P.earth,0,.12,z,6.3,.24,.24);return g;}
-  function market(){const g=new T.Group();for(const x of [-2.6,2.6])for(const z of [-1.7,1.7])rod(g,[x,0,z],[x,2.5,z],.06,.045,P.wood);for(let i=0;i<12;i++)boxAt(g,textured(i%2?0xe5cf9f:0xa95e48,'cloth'),-2.8+i*.51,2.5,0,.51,.07,4.1);for(const x of [-1.7,0,1.7]){boxAt(g,P.wood,x,.6,.6,1.45,1.1,1);boxAt(g,P.darkWood,x,1.18,.6,1.5,.1,1.1);for(let i=0;i<18;i++)oval(g,material(x<0?0xb96e3a:x>0?0x7e9146:0xc8a653),x+range(-.55,.55),1.3+range(0,.12),.6+range(-.35,.35),.1,.09,.1);}return batchStatic(g);}
-  function well(){const g=new T.Group();const stone=mesh(new T.CylinderGeometry(1.3,1.4,1,32,1,true),P.stone,g,[0,.5,0]);mesh(new T.TorusGeometry(1.3,.13,10,40),P.stone,g,[0,1,0]).rotation.x=Math.PI/2;mesh(new T.CircleGeometry(1.15,32),P.water,g,[0,.32,0]).rotation.x=-Math.PI/2;for(const x of [-1.3,1.3])rod(g,[x,0,0],[x,2.8,0],.10,.075,P.wood);rod(g,[-1.5,2.8,0],[1.5,2.8,0],.09,.09,P.wood);tube(g,[[0,2.8,0],[0,1.8,.1],[0,.6,.1]],.018,P.wood);clayPot(g,1.8,0,1.2);return batchStatic(g);}
-  const originalBuilding=buildingMesh;buildingMesh=function(id,b){if(id==='dairy'){const g=detailedHouse();g.name='Dairy courtyard';for(let i=0;i<2;i++){const c=cowRigs[i].cow.clone();c.position.set(-3.7,0,-1+i*2);c.rotation.y=.5;g.add(c);}const board=villageSign('दूध | DAIRY',1.8);board.position.set(2.8,0,3);g.add(board);return g;}if(id==='field')return field();if(id==='market')return market();if(id==='well')return well();if(id==='forest'){const g=new T.Group();for(let i=0;i<4;i++){const n=neem.clone();n.position.set((i%2)*3-1.5,0,Math.floor(i/2)*3-1.5);n.scale.setScalar(.65);g.add(n);}return g;}if(['house','home','homeM','homeS'].includes(id)){const g=detailedHouse();const scale=id==='homeS'?1.3:id==='homeM'?1.2:1;g.scale.setScalar(scale);g.userData.baseScale=scale;const tint=[0xf0dfba,0xc1d5c5,0xd4c4a7,0xc2cfdb][Math.abs(Math.floor(b.x+b.y))%4];g.traverse(m=>{if(m.material===P.plaster){m.material=P.plaster.clone();m.material.color=color(tint);}});return g;}const g=originalBuilding(id,b);if(['panchayat','school','clinic','patwari','police','workshop','mill','dairy'].includes(id)){const z=id==='panchayat'?2.9:2.3;windowAt(g,-1.6,z);windowAt(g,1.6,z);clayPot(g,-3,0,z+.7);clayPot(g,3,0,z+.7,.8);const board=villageSign(({panchayat:'पंचायत भवन | PANCHAYAT',school:'विद्यालय | SCHOOL',clinic:'स्वास्थ्य केंद्र | HEALTH',patwari:'भूमि अभिलेख | LAND RECORDS',police:'पुलिस | POLICE',workshop:'कारीगर | WORKSHOP',mill:'आटा चक्की | FLOUR MILL',dairy:'दूध केंद्र | DAIRY'})[id],3);board.position.set(0,1.3,z+.05);board.children.slice(1).forEach(o=>o.visible=false);g.add(board);}g.traverse(m=>{if(m.isMesh&&m.material&&!Array.isArray(m.material)&&!m.material.map){m.material=m.material.clone();m.material.flatShading=false;m.material.needsUpdate=true;}});return g;};
-  shadow(104,86,7,7);
+  function batchStatic(g) {
+    g.updateMatrixWorld(true);
+    const batches = new Map(),
+      remove = [];
+    g.traverse((m) => {
+      if (!m.isMesh || m.isInstancedMesh || Array.isArray(m.material)) return;
+      const geo = m.geometry.index
+        ? m.geometry.toNonIndexed()
+        : m.geometry.clone();
+      geo.applyMatrix4(m.matrixWorld);
+      if (!geo.attributes.normal) geo.computeVertexNormals();
+      if (!geo.attributes.uv)
+        geo.setAttribute(
+          "uv",
+          new T.BufferAttribute(
+            new Float32Array(geo.attributes.position.count * 2),
+            2,
+          ),
+        );
+      let list = batches.get(m.material);
+      if (!list) batches.set(m.material, (list = []));
+      list.push(geo);
+      remove.push(m);
+    });
+    remove.forEach((m) => m.parent.remove(m));
+    for (const [mat, list] of batches) {
+      const geo = new T.BufferGeometry();
+      for (const [name, size] of [
+        ["position", 3],
+        ["normal", 3],
+        ["uv", 2],
+      ]) {
+        const data = new Float32Array(
+          list.reduce((n, g) => n + g.attributes[name].array.length, 0),
+        );
+        let at = 0;
+        for (const g of list) {
+          data.set(g.attributes[name].array, at);
+          at += g.attributes[name].array.length;
+        }
+        geo.setAttribute(name, new T.BufferAttribute(data, size));
+      }
+      mesh(geo, mat, g);
+      list.forEach((g) => g.dispose());
+    }
+    return g;
+  }
+  function field() {
+    const g = new T.Group();
+    boxAt(g, P.earth, 0, 0.04, 0, 6.1, 0.08, 4.9);
+    const stalkGeo = new T.CylinderGeometry(0.009, 0.018, 0.67, 5),
+      earGeo = new T.SphereGeometry(0.065, 7, 5);
+    earGeo.scale(0.65, 2.7, 0.65);
+    const stems = new T.InstancedMesh(stalkGeo, material(0xb7ad63), 500),
+      ears = new T.InstancedMesh(earGeo, material(0xc9ad62), 500),
+      d = new T.Object3D();
+    for (let i = 0; i < 500; i++) {
+      const x = range(-2.8, 2.8),
+        z = range(-2.15, 2.15),
+        h = range(0.75, 1.15);
+      d.position.set(x, 0.36 * h, z);
+      d.rotation.set(range(-0.1, 0.1), 0, range(-0.07, 0.07));
+      d.scale.set(1, h, 1);
+      d.updateMatrix();
+      stems.setMatrixAt(i, d.matrix);
+      d.position.y = 0.75 * h;
+      d.updateMatrix();
+      ears.setMatrixAt(i, d.matrix);
+    }
+    stems.castShadow = ears.castShadow = true;
+    g.add(stems, ears);
+    for (const z of [-2.5, 2.5]) boxAt(g, P.earth, 0, 0.12, z, 6.3, 0.24, 0.24);
+    return g;
+  }
+  function market() {
+    const g = new T.Group();
+    for (const x of [-2.6, 2.6])
+      for (const z of [-1.7, 1.7])
+        rod(g, [x, 0, z], [x, 2.5, z], 0.06, 0.045, P.wood);
+    for (let i = 0; i < 12; i++)
+      boxAt(
+        g,
+        textured(i % 2 ? 0xe5cf9f : 0xa95e48, "cloth"),
+        -2.8 + i * 0.51,
+        2.5,
+        0,
+        0.51,
+        0.07,
+        4.1,
+      );
+    for (const x of [-1.7, 0, 1.7]) {
+      boxAt(g, P.wood, x, 0.6, 0.6, 1.45, 1.1, 1);
+      boxAt(g, P.darkWood, x, 1.18, 0.6, 1.5, 0.1, 1.1);
+      for (let i = 0; i < 18; i++)
+        oval(
+          g,
+          material(x < 0 ? 0xb96e3a : x > 0 ? 0x7e9146 : 0xc8a653),
+          x + range(-0.55, 0.55),
+          1.3 + range(0, 0.12),
+          0.6 + range(-0.35, 0.35),
+          0.1,
+          0.09,
+          0.1,
+        );
+    }
+    return batchStatic(g);
+  }
+  function well() {
+    const g = new T.Group();
+    const stone = mesh(
+      new T.CylinderGeometry(1.3, 1.4, 1, 32, 1, true),
+      P.stone,
+      g,
+      [0, 0.5, 0],
+    );
+    mesh(
+      new T.TorusGeometry(1.3, 0.13, 10, 40),
+      P.stone,
+      g,
+      [0, 1, 0],
+    ).rotation.x = Math.PI / 2;
+    mesh(new T.CircleGeometry(1.15, 32), P.water, g, [0, 0.32, 0]).rotation.x =
+      -Math.PI / 2;
+    for (const x of [-1.3, 1.3])
+      rod(g, [x, 0, 0], [x, 2.8, 0], 0.1, 0.075, P.wood);
+    rod(g, [-1.5, 2.8, 0], [1.5, 2.8, 0], 0.09, 0.09, P.wood);
+    tube(
+      g,
+      [
+        [0, 2.8, 0],
+        [0, 1.8, 0.1],
+        [0, 0.6, 0.1],
+      ],
+      0.018,
+      P.wood,
+    );
+    clayPot(g, 1.8, 0, 1.2);
+    return batchStatic(g);
+  }
+  const originalBuilding = buildingMesh;
+  buildingMesh = function (id, b) {
+    if (id === "dairy") {
+      const g = detailedHouse();
+      g.name = "Dairy courtyard";
+      for (let i = 0; i < 2; i++) {
+        const c = cowRigs[i].cow.clone();
+        c.position.set(-3.7, 0, -1 + i * 2);
+        c.rotation.y = 0.5;
+        g.add(c);
+      }
+      const board = villageSign("दूध | DAIRY", 1.8);
+      board.position.set(2.8, 0, 3);
+      g.add(board);
+      return g;
+    }
+    if (id === "field") return field();
+    if (id === "market") return market();
+    if (id === "well") return well();
+    if (id === "forest") {
+      const g = new T.Group();
+      for (let i = 0; i < 4; i++) {
+        const n = neem.clone();
+        n.position.set((i % 2) * 3 - 1.5, 0, Math.floor(i / 2) * 3 - 1.5);
+        n.scale.setScalar(0.65);
+        g.add(n);
+      }
+      return g;
+    }
+    if (["house", "home", "homeM", "homeS"].includes(id)) {
+      const g = detailedHouse();
+      const scale = id === "homeS" ? 1.3 : id === "homeM" ? 1.2 : 1;
+      g.scale.setScalar(scale);
+      g.userData.baseScale = scale;
+      const tint = [0xf0dfba, 0xc1d5c5, 0xd4c4a7, 0xc2cfdb][
+        Math.abs(Math.floor(b.x + b.y)) % 4
+      ];
+      g.traverse((m) => {
+        if (m.material === P.plaster) {
+          m.material = P.plaster.clone();
+          m.material.color = color(tint);
+        }
+      });
+      return g;
+    }
+    const g = originalBuilding(id, b);
+    if (
+      [
+        "panchayat",
+        "school",
+        "clinic",
+        "patwari",
+        "police",
+        "workshop",
+        "mill",
+        "dairy",
+      ].includes(id)
+    ) {
+      const z = id === "panchayat" ? 2.9 : 2.3;
+      windowAt(g, -1.6, z);
+      windowAt(g, 1.6, z);
+      clayPot(g, -3, 0, z + 0.7);
+      clayPot(g, 3, 0, z + 0.7, 0.8);
+      const board = villageSign(
+        {
+          panchayat: "पंचायत भवन | PANCHAYAT",
+          school: "विद्यालय | SCHOOL",
+          clinic: "स्वास्थ्य केंद्र | HEALTH",
+          patwari: "भूमि अभिलेख | LAND RECORDS",
+          police: "पुलिस | POLICE",
+          workshop: "कारीगर | WORKSHOP",
+          mill: "आटा चक्की | FLOUR MILL",
+          dairy: "दूध केंद्र | DAIRY",
+        }[id],
+        3,
+      );
+      board.position.set(0, 1.3, z + 0.05);
+      board.children.slice(1).forEach((o) => (o.visible = false));
+      g.add(board);
+    }
+    g.traverse((m) => {
+      if (
+        m.isMesh &&
+        m.material &&
+        !Array.isArray(m.material) &&
+        !m.material.map
+      ) {
+        m.material = m.material.clone();
+        m.material.flatShading = false;
+        m.material.needsUpdate = true;
+      }
+    });
+    return g;
+  };
+  shadow(104, 86, 7, 7);
 
   // Replace only the pump's visual group; preserve pumpUntil and the E interaction.
-  pumpHandle.parent.visible=false;pumpSign.visible=false;
-  const pump=new T.Group();pump.position.set(114,groundY(114,76),76);pump.name='Cast-iron hand pump';corner.add(pump);
-  boxAt(pump,P.stone,0,.09,0,2.3,.18,1.8);for(const z of [-.9,.9])boxAt(pump,P.mortar,0,.19,z,2.35,.16,.10);boxAt(pump,P.mortar,1.14,.19,0,.10,.16,1.85);
-  rod(pump,[0,.18,0],[0,1.23,0],.10,.085,P.pump,20);mesh(new T.CylinderGeometry(.18,.18,.10,12),P.iron,pump,[0,.24,0]);
-  for(const x of [-.115,.115])for(const z of [-.115,.115])mesh(new T.CylinderGeometry(.024,.024,.025,6),P.steel,pump,[x,.30,z]);
-  oval(pump,P.pump,0,1.23,0,.16,.15,.13);tube(pump,[[0,1.08,0],[-.27,1.08,0],[-.45,1.04,0],[-.47,.94,0]],.055,P.pump);
-  const pivot=new T.Group();pivot.position.set(0,1.32,0);pump.add(pivot);rod(pivot,[0,0,0],[.82,.05,0],.032,.027,P.iron);rod(pivot,[.82,.05,-.11],[.82,.05,.11],.036,.036,P.darkWood);pumpHandle=pivot;
-  const stream=mesh(new T.CylinderGeometry(.018,.03,.5,10),P.water,pump,[-.47,.65,0]);stream.visible=false;pumpStream=stream;
-  const bucket=new T.Group();bucket.position.set(-.47,.18,0);pump.add(bucket);const bp=[[.16,0],[.17,.025],[.21,.31],[.21,.34],[.20,.34],[.195,.31],[.155,.035]].map(p=>new T.Vector2(...p));mesh(new T.LatheGeometry(bp,28),P.steel,bucket);mesh(new T.TorusGeometry(.205,.012,8,28),P.iron,bucket,[0,.33,0]).rotation.x=Math.PI/2;tube(bucket,[[-.20,.28,0],[-.17,.56,0],[.17,.56,0],[.20,.28,0]],.008,P.iron);
-  const waterDisc=mesh(new T.CircleGeometry(.185,24),P.water,bucket,[0,.28,0]);waterDisc.rotation.x=-Math.PI/2;
-  for(let i=0;i<13;i++)boxAt(pump,P.stone,-1.18-i*.20,.025,.13,.19,.05,.23);shadow(114,76,3.6,3.0);
+  pumpHandle.parent.visible = false;
+  pumpSign.visible = false;
+  const pump = new T.Group();
+  pump.position.set(114, groundY(114, 76), 76);
+  pump.name = "Cast-iron hand pump";
+  corner.add(pump);
+  boxAt(pump, P.stone, 0, 0.09, 0, 2.3, 0.18, 1.8);
+  for (const z of [-0.9, 0.9])
+    boxAt(pump, P.mortar, 0, 0.19, z, 2.35, 0.16, 0.1);
+  boxAt(pump, P.mortar, 1.14, 0.19, 0, 0.1, 0.16, 1.85);
+  rod(pump, [0, 0.18, 0], [0, 1.23, 0], 0.1, 0.085, P.pump, 20);
+  mesh(new T.CylinderGeometry(0.18, 0.18, 0.1, 12), P.iron, pump, [0, 0.24, 0]);
+  for (const x of [-0.115, 0.115])
+    for (const z of [-0.115, 0.115])
+      mesh(new T.CylinderGeometry(0.024, 0.024, 0.025, 6), P.steel, pump, [
+        x,
+        0.3,
+        z,
+      ]);
+  oval(pump, P.pump, 0, 1.23, 0, 0.16, 0.15, 0.13);
+  tube(
+    pump,
+    [
+      [0, 1.08, 0],
+      [-0.27, 1.08, 0],
+      [-0.45, 1.04, 0],
+      [-0.47, 0.94, 0],
+    ],
+    0.055,
+    P.pump,
+  );
+  const pivot = new T.Group();
+  pivot.position.set(0, 1.32, 0);
+  pump.add(pivot);
+  rod(pivot, [0, 0, 0], [0.82, 0.05, 0], 0.032, 0.027, P.iron);
+  rod(pivot, [0.82, 0.05, -0.11], [0.82, 0.05, 0.11], 0.036, 0.036, P.darkWood);
+  pumpHandle = pivot;
+  const stream = mesh(
+    new T.CylinderGeometry(0.018, 0.03, 0.5, 10),
+    P.water,
+    pump,
+    [-0.47, 0.65, 0],
+  );
+  stream.visible = false;
+  pumpStream = stream;
+  const bucket = new T.Group();
+  bucket.position.set(-0.47, 0.18, 0);
+  pump.add(bucket);
+  const bp = [
+    [0.16, 0],
+    [0.17, 0.025],
+    [0.21, 0.31],
+    [0.21, 0.34],
+    [0.2, 0.34],
+    [0.195, 0.31],
+    [0.155, 0.035],
+  ].map((p) => new T.Vector2(...p));
+  mesh(new T.LatheGeometry(bp, 28), P.steel, bucket);
+  mesh(
+    new T.TorusGeometry(0.205, 0.012, 8, 28),
+    P.iron,
+    bucket,
+    [0, 0.33, 0],
+  ).rotation.x = Math.PI / 2;
+  tube(
+    bucket,
+    [
+      [-0.2, 0.28, 0],
+      [-0.17, 0.56, 0],
+      [0.17, 0.56, 0],
+      [0.2, 0.28, 0],
+    ],
+    0.008,
+    P.iron,
+  );
+  const waterDisc = mesh(
+    new T.CircleGeometry(0.185, 24),
+    P.water,
+    bucket,
+    [0, 0.28, 0],
+  );
+  waterDisc.rotation.x = -Math.PI / 2;
+  for (let i = 0; i < 13; i++)
+    boxAt(pump, P.stone, -1.18 - i * 0.2, 0.025, 0.13, 0.19, 0.05, 0.23);
+  shadow(114, 76, 3.6, 3.0);
   // Low courtyard wall and hand-laid stone path. Openings leave the door and pump accessible.
-  for(let i=0;i<13;i++){const x=100.4+i*.30;for(let r=0;r<3;r++)boxAt(corner,P.brick,x+(r%2)*.12,groundY(x,90.2)+.08+r*.13,90.2,.27,.11,.25);}
-  for(let i=0;i<12;i++){const x=106.5+i*.47,z=88.9-(i*.15);const m=mesh(new T.CylinderGeometry(range(.23,.30),range(.25,.34),.055,7),P.stone,corner,[x,groundY(x,z)+.025,z],[1,1,.75]);m.rotation.y=random()*6;}
+  for (let i = 0; i < 13; i++) {
+    const x = 100.4 + i * 0.3;
+    for (let r = 0; r < 3; r++)
+      boxAt(
+        corner,
+        P.brick,
+        x + (r % 2) * 0.12,
+        groundY(x, 90.2) + 0.08 + r * 0.13,
+        90.2,
+        0.27,
+        0.11,
+        0.25,
+      );
+  }
+  for (let i = 0; i < 12; i++) {
+    const x = 106.5 + i * 0.47,
+      z = 88.9 - i * 0.15;
+    const m = mesh(
+      new T.CylinderGeometry(range(0.23, 0.3), range(0.25, 0.34), 0.055, 7),
+      P.stone,
+      corner,
+      [x, groundY(x, z) + 0.025, z],
+      [1, 1, 0.75],
+    );
+    m.rotation.y = random() * 6;
+  }
   // Woven charpai at the house edge: a real rope grid and four turned legs.
-  const cot=new T.Group();cot.position.set(107.2,groundY(107.2,89.2),89.2);cot.rotation.y=.3;corner.add(cot);for(const x of [-.85,.85])for(const z of [-.39,.39])rod(cot,[x,0,z],[x,.53,z],.04,.052,P.wood);for(const z of [-.42,.42])rod(cot,[-.95,.5,z],[.95,.5,z],.04,.04,P.wood);for(const x of [-.95,.95])rod(cot,[x,.5,-.42],[x,.5,.42],.035,.035,P.wood);const rope=material(0xb19d73);for(let i=0;i<29;i++)rod(cot,[-.9+i*.064,.50,-.39],[-.9+i*.064,.49,.39],.006,.006,rope,5);for(let i=0;i<13;i++)rod(cot,[-.90,.50,-.37+i*.060],[.90,.50,-.37+i*.060],.006,.006,rope,5);
+  const cot = new T.Group();
+  cot.position.set(107.2, groundY(107.2, 89.2), 89.2);
+  cot.rotation.y = 0.3;
+  corner.add(cot);
+  for (const x of [-0.85, 0.85])
+    for (const z of [-0.39, 0.39])
+      rod(cot, [x, 0, z], [x, 0.53, z], 0.04, 0.052, P.wood);
+  for (const z of [-0.42, 0.42])
+    rod(cot, [-0.95, 0.5, z], [0.95, 0.5, z], 0.04, 0.04, P.wood);
+  for (const x of [-0.95, 0.95])
+    rod(cot, [x, 0.5, -0.42], [x, 0.5, 0.42], 0.035, 0.035, P.wood);
+  const rope = material(0xb19d73);
+  for (let i = 0; i < 29; i++)
+    rod(
+      cot,
+      [-0.9 + i * 0.064, 0.5, -0.39],
+      [-0.9 + i * 0.064, 0.49, 0.39],
+      0.006,
+      0.006,
+      rope,
+      5,
+    );
+  for (let i = 0; i < 13; i++)
+    rod(
+      cot,
+      [-0.9, 0.5, -0.37 + i * 0.06],
+      [0.9, 0.5, -0.37 + i * 0.06],
+      0.006,
+      0.006,
+      rope,
+      5,
+    );
 
   // Neem-like foliage: compound leaf cards batched into one instanced draw.
-  const leafCanvas=document.createElement('canvas');leafCanvas.width=256;leafCanvas.height=128;{const x=leafCanvas.getContext('2d');x.strokeStyle='#a9a374';x.lineWidth=2;x.beginPath();x.moveTo(10,65);x.quadraticCurveTo(120,54,248,62);x.stroke();for(let i=0;i<7;i++)for(const side of [-1,1]){const px=20+i*29,py=62;x.fillStyle=i%2?'#779647':'#526f30';x.beginPath();x.moveTo(px,py);x.bezierCurveTo(px-6,py+side*22,px+8,py+side*39,px+30,py+side*45);x.bezierCurveTo(px+34,py+side*20,px+16,py+side*4,px,py);x.fill();x.strokeStyle='#b0ba714e';x.lineWidth=1;x.beginPath();x.moveTo(px,py);x.lineTo(px+32,py+side*40);x.stroke();}}
-  const leafMap=new T.CanvasTexture(leafCanvas);leafMap.encoding=T.sRGBEncoding;leafMap.generateMipmaps=false;leafMap.minFilter=T.LinearFilter;const leafMat=new T.MeshStandardMaterial({map:leafMap,alphaTest:.25,side:T.DoubleSide,roughness:1,color:color(0xf2edc3)});
-  const neem=new T.Group();neem.position.set(119,groundY(119,80),80);corner.add(neem);rod(neem,[0,0,0],[.15,2.8,0],.30,.13,P.bark,16);rod(neem,[.15,2.8,0],[-.2,4.3,.15],.13,.06,P.bark);const clusters=[];
-  for(let i=0;i<14;i++){const a=i*2.399,r=range(1.2,2.6),y=range(3.5,5.5),end=[Math.cos(a)*r,y,Math.sin(a)*r*.85];rod(neem,[.1,range(2,3.4),0],end,.095,.021,P.bark);clusters.push(end);}
-  const foliage=new T.InstancedMesh(new T.PlaneGeometry(1.0,.55),leafMat,2100);const obj=new T.Object3D();for(let i=0;i<2100;i++){const c=clusters[i%clusters.length];let x,y,z;do{x=range(-1,1);y=range(-1,1);z=range(-1,1);}while(x*x+y*y+z*z>1);obj.position.set(c[0]+x*1.3,c[1]+y*.8,c[2]+z*1.2);obj.rotation.set(range(-1.5,1.5),range(0,6.28),range(-1.5,1.5));obj.scale.setScalar(range(.7,1.3));obj.updateMatrix();foliage.setMatrixAt(i,obj.matrix);foliage.setColorAt(i,new T.Color().setHSL(range(.18,.24),range(.10,.26),range(.63,.94)));}if(mobileGraphics)foliage.count=700;foliage.castShadow=true;neem.add(foliage);shadow(119,80,7,6);SOLIDS.push({x:1190,z:800,r:7});
+  const leafCanvas = document.createElement("canvas");
+  leafCanvas.width = 256;
+  leafCanvas.height = 128;
+  {
+    const x = leafCanvas.getContext("2d");
+    x.strokeStyle = "#a9a374";
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(10, 65);
+    x.quadraticCurveTo(120, 54, 248, 62);
+    x.stroke();
+    for (let i = 0; i < 7; i++)
+      for (const side of [-1, 1]) {
+        const px = 20 + i * 29,
+          py = 62;
+        x.fillStyle = i % 2 ? "#779647" : "#526f30";
+        x.beginPath();
+        x.moveTo(px, py);
+        x.bezierCurveTo(
+          px - 6,
+          py + side * 22,
+          px + 8,
+          py + side * 39,
+          px + 30,
+          py + side * 45,
+        );
+        x.bezierCurveTo(
+          px + 34,
+          py + side * 20,
+          px + 16,
+          py + side * 4,
+          px,
+          py,
+        );
+        x.fill();
+        x.strokeStyle = "#b0ba714e";
+        x.lineWidth = 1;
+        x.beginPath();
+        x.moveTo(px, py);
+        x.lineTo(px + 32, py + side * 40);
+        x.stroke();
+      }
+  }
+  const leafMap = new T.CanvasTexture(leafCanvas);
+  leafMap.colorSpace = T.SRGBColorSpace;
+  leafMap.generateMipmaps = false;
+  leafMap.minFilter = T.LinearFilter;
+  const leafMat = new T.MeshStandardMaterial({
+    map: leafMap,
+    alphaTest: 0.25,
+    side: T.DoubleSide,
+    roughness: 1,
+    color: color(0xf2edc3),
+  });
+  const neem = new T.Group();
+  neem.position.set(119, groundY(119, 80), 80);
+  corner.add(neem);
+  rod(neem, [0, 0, 0], [0.15, 2.8, 0], 0.3, 0.13, P.bark, 16);
+  rod(neem, [0.15, 2.8, 0], [-0.2, 4.3, 0.15], 0.13, 0.06, P.bark);
+  const clusters = [];
+  for (let i = 0; i < 14; i++) {
+    const a = i * 2.399,
+      r = range(1.2, 2.6),
+      y = range(3.5, 5.5),
+      end = [Math.cos(a) * r, y, Math.sin(a) * r * 0.85];
+    rod(neem, [0.1, range(2, 3.4), 0], end, 0.095, 0.021, P.bark);
+    clusters.push(end);
+  }
+  const foliage = new T.InstancedMesh(
+    new T.PlaneGeometry(1.0, 0.55),
+    leafMat,
+    2100,
+  );
+  const obj = new T.Object3D();
+  for (let i = 0; i < 2100; i++) {
+    const c = clusters[i % clusters.length];
+    let x, y, z;
+    do {
+      x = range(-1, 1);
+      y = range(-1, 1);
+      z = range(-1, 1);
+    } while (x * x + y * y + z * z > 1);
+    obj.position.set(c[0] + x * 1.3, c[1] + y * 0.8, c[2] + z * 1.2);
+    obj.rotation.set(range(-1.5, 1.5), range(0, 6.28), range(-1.5, 1.5));
+    obj.scale.setScalar(range(0.7, 1.3));
+    obj.updateMatrix();
+    foliage.setMatrixAt(i, obj.matrix);
+    foliage.setColorAt(
+      i,
+      new T.Color().setHSL(
+        range(0.18, 0.24),
+        range(0.1, 0.26),
+        range(0.63, 0.94),
+      ),
+    );
+  }
+  foliage.count = mobileGraphics ? 700 : 1050;
+  foliage.castShadow = true;
+  neem.add(foliage);
+  shadow(119, 80, 7, 6);
+  SOLIDS.push({ x: 1190, z: 800, r: 7 });
   // Ground vegetation and fallen stones use instancing rather than hundreds of draw calls.
-  const bladeGeo=new T.BufferGeometry();bladeGeo.setAttribute('position',new T.Float32BufferAttribute([-.024,0,0,.024,0,0,.013,.20,.015,0,.35,.04,-.012,.20,.015],3));bladeGeo.setIndex([0,1,2,0,2,4,4,2,3]);bladeGeo.computeVertexNormals();const blades=new T.InstancedMesh(bladeGeo,material(0x798652,{side:T.DoubleSide}),1500);let grassN=0;for(let i=0;i<2000&&grassN<1500;i++){const x=range(99,123),z=range(72,93);if(Math.hypot(x-114,z-76)<2.6||(x>100&&x<107&&z>83&&z<90)||Math.abs(z-88.8)<1.2||(x>108&&x<116&&z>78&&z<86))continue;obj.position.set(x,groundY(x,z)+.012,z);obj.rotation.set(0,range(0,6.28),range(-.25,.25));obj.scale.setScalar(range(.5,1.6));obj.updateMatrix();blades.setMatrixAt(grassN++,obj.matrix);}blades.count=grassN;corner.add(blades);
-  const stones=new T.InstancedMesh(new T.IcosahedronGeometry(1,0),P.stone,130);for(let i=0;i<130;i++){const x=range(98,123),z=range(71,94);obj.position.set(x,groundY(x,z),z);obj.rotation.set(range(0,3),range(0,3),range(0,3));obj.scale.set(range(.03,.12),range(.015,.05),range(.025,.11));obj.updateMatrix();stones.setMatrixAt(i,obj.matrix);}stones.receiveShadow=true;corner.add(stones);
+  const bladeGeo = new T.BufferGeometry();
+  bladeGeo.setAttribute(
+    "position",
+    new T.Float32BufferAttribute(
+      [
+        -0.024, 0, 0, 0.024, 0, 0, 0.013, 0.2, 0.015, 0, 0.35, 0.04, -0.012,
+        0.2, 0.015,
+      ],
+      3,
+    ),
+  );
+  bladeGeo.setIndex([0, 1, 2, 0, 2, 4, 4, 2, 3]);
+  bladeGeo.computeVertexNormals();
+  const blades = new T.InstancedMesh(
+    bladeGeo,
+    material(0x798652, { side: T.DoubleSide }),
+    1500,
+  );
+  let grassN = 0;
+  for (let i = 0; i < 2000 && grassN < 1500; i++) {
+    const x = range(99, 123),
+      z = range(72, 93);
+    if (
+      Math.hypot(x - 114, z - 76) < 2.6 ||
+      (x > 100 && x < 107 && z > 83 && z < 90) ||
+      Math.abs(z - 88.8) < 1.2 ||
+      (x > 108 && x < 116 && z > 78 && z < 86)
+    )
+      continue;
+    obj.position.set(x, groundY(x, z) + 0.012, z);
+    obj.rotation.set(0, range(0, 6.28), range(-0.25, 0.25));
+    obj.scale.setScalar(range(0.5, 1.6));
+    obj.updateMatrix();
+    blades.setMatrixAt(grassN++, obj.matrix);
+  }
+  blades.count = grassN;
+  corner.add(blades);
+  const stones = new T.InstancedMesh(
+    new T.IcosahedronGeometry(1, 0),
+    P.stone,
+    130,
+  );
+  for (let i = 0; i < 130; i++) {
+    const x = range(98, 123),
+      z = range(71, 94);
+    obj.position.set(x, groundY(x, z), z);
+    obj.rotation.set(range(0, 3), range(0, 3), range(0, 3));
+    obj.scale.set(range(0.03, 0.12), range(0.015, 0.05), range(0.025, 0.11));
+    obj.updateMatrix();
+    stones.setMatrixAt(i, obj.matrix);
+  }
+  stones.receiveShadow = true;
+  corner.add(stones);
 
   // One continuous ovoid head. Features are painted onto its surface, never stacked facial meshes.
-  const faceCache=new Map();let humanIndex=0;
-  function faceMaterial(skin){if(faceCache.has(skin))return faceCache.get(skin);const c=document.createElement('canvas');c.width=1024;c.height=512;const x=c.getContext('2d');x.fillStyle=skin;x.fillRect(0,0,1024,512);
-    const cx=256,cy=261;x.fillStyle='#da927b';for(const side of [-1,1]){x.globalAlpha=.32;x.beginPath();x.ellipse(cx+side*65,cy+27,24,14,0,0,7);x.fill();}x.globalAlpha=1;
-    for(const side of [-1,1]){const ex=cx+side*43;x.fillStyle='#fff9ec';x.beginPath();x.ellipse(ex,cy-11,20,22,0,0,7);x.fill();x.fillStyle='#392a25';x.beginPath();x.ellipse(ex,cy-9,11,15,0,0,7);x.fill();x.fillStyle='white';x.beginPath();x.arc(ex-4,cy-15,4,0,7);x.fill();x.strokeStyle='#4d3329';x.lineWidth=5;x.lineCap='round';x.beginPath();x.moveTo(ex-16,cy-42);x.quadraticCurveTo(ex,cy-49,ex+17,cy-40);x.stroke();}
-    x.strokeStyle='#986449';x.lineWidth=3;x.beginPath();x.moveTo(cx,cy+2);x.quadraticCurveTo(cx-7,cy+19,cx+5,cy+19);x.stroke();x.strokeStyle='#793f39';x.lineWidth=5;x.beginPath();x.moveTo(cx-28,cy+42);x.quadraticCurveTo(cx,cy+66,cx+28,cy+42);x.stroke();
-    const map=new T.CanvasTexture(c);map.encoding=T.sRGBEncoding;const m=material(0xffffff,{map,roughness:.86});faceCache.set(skin,m);return m;}
-  function human(g){const lamp=g.userData.lamp;for(const child of [...g.children])if(child!==lamp)g.remove(child);g.scale.setScalar(1);
-    const i=humanIndex++,skins=['#b8815f','#9c684a','#ca9571','#a87351'],skin=material(skins[i%4]),hair=material(0x302820),cloth=textured([0xd18053,0x72a5a0,0xd9b05b,0xa188b6,0x5c8dad][i%5],'cloth'),trouser=textured(0xf0e8d5,'cloth'),leather=material(0x4b3d31),legs=[],arms=[];
-    const body=mesh(new T.CylinderGeometry(.23,.26,.63,24),cloth,g,[0,1.02,0],[1,1,.68]);oval(g,cloth,0,1.27,0,.27,.12,.17);rod(g,[0,1.3,0],[0,1.48,0],.075,.07,skin);
-    const head=mesh(new T.SphereGeometry(1,mobileGraphics?20:40,mobileGraphics?14:28),faceMaterial(skins[i%4]),g,[0,1.61,.01],[.205,.245,.19]);head.name='Single friendly ovoid head';
-    mesh(new T.SphereGeometry(1,mobileGraphics?16:32,mobileGraphics?10:20,0,Math.PI*2,0,Math.PI*.34),hair,g,[0,1.62,.004],[.212,.249,.196]);if(i%3===1)oval(g,hair,0,1.71,-.17,.13,.12,.09);
-    for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.115,.73,0);g.add(leg);rod(leg,[0,0,0],[0,-.30,0],.095,.073,trouser);const shin=new T.Group();shin.position.y=-.30;leg.add(shin);rod(shin,[0,0,0],[0,-.32,0],.073,.05,trouser);oval(shin,leather,0,-.365,.065,.081,.045,.14);leg.userData.shin=shin;legs.push(leg);
-      const arm=new T.Group();arm.position.set(side*.26,1.27,0);g.add(arm);rod(arm,[0,0,0],[side*.025,-.25,0],.079,.055,cloth);rod(arm,[side*.025,-.25,0],[side*.025,-.47,.045],.05,.032,skin);oval(arm,skin,side*.025,-.49,.04,.043,.065,.035);arms.push(arm);}
-    boxAt(g,textured(0xf0d7a8,'cloth'),-.14,1.04,.18,.12,.63,.025);for(let j=0;j<4;j++)oval(g,leather,.01,1.25-j*.075,.172,.011,.011,.005);
-    g.userData={...g.userData,body,legs,arms,head,cornerRig:true,gait:0,last:new T.Vector3()};return g;
+  const faceCache = new Map();
+  let humanIndex = 0;
+  function faceMaterial(skin) {
+    if (faceCache.has(skin)) return faceCache.get(skin);
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 512;
+    const x = c.getContext("2d");
+    x.fillStyle = skin;
+    x.fillRect(0, 0, 1024, 512);
+    const cx = 256,
+      cy = 261;
+    x.fillStyle = "#da927b";
+    for (const side of [-1, 1]) {
+      x.globalAlpha = 0.32;
+      x.beginPath();
+      x.ellipse(cx + side * 65, cy + 27, 24, 14, 0, 0, 7);
+      x.fill();
+    }
+    x.globalAlpha = 1;
+    for (const side of [-1, 1]) {
+      const ex = cx + side * 43;
+      x.fillStyle = "#fff9ec";
+      x.beginPath();
+      x.ellipse(ex, cy - 11, 20, 22, 0, 0, 7);
+      x.fill();
+      x.fillStyle = "#392a25";
+      x.beginPath();
+      x.ellipse(ex, cy - 9, 11, 15, 0, 0, 7);
+      x.fill();
+      x.fillStyle = "white";
+      x.beginPath();
+      x.arc(ex - 4, cy - 15, 4, 0, 7);
+      x.fill();
+      x.strokeStyle = "#4d3329";
+      x.lineWidth = 5;
+      x.lineCap = "round";
+      x.beginPath();
+      x.moveTo(ex - 16, cy - 42);
+      x.quadraticCurveTo(ex, cy - 49, ex + 17, cy - 40);
+      x.stroke();
+    }
+    x.strokeStyle = "#986449";
+    x.lineWidth = 3;
+    x.beginPath();
+    x.moveTo(cx, cy + 2);
+    x.quadraticCurveTo(cx - 7, cy + 19, cx + 5, cy + 19);
+    x.stroke();
+    x.strokeStyle = "#793f39";
+    x.lineWidth = 5;
+    x.beginPath();
+    x.moveTo(cx - 28, cy + 42);
+    x.quadraticCurveTo(cx, cy + 66, cx + 28, cy + 42);
+    x.stroke();
+    const map = new T.CanvasTexture(c);
+    map.colorSpace = T.SRGBColorSpace;
+    const m = material(0xffffff, { map, roughness: 0.86 });
+    faceCache.set(skin, m);
+    return m;
   }
-  const oldPerson=person;person=function(...args){return human(oldPerson(...args));};human(playerMesh);
-  animatePerson=function(g,t,moving){if(!g.userData.cornerRig)return;const d=g.userData,dist=d.last.distanceTo(g.position);d.last.copy(g.position);if(moving&&dist<1)d.gait+=dist*5.2;const a=moving?Math.sin(d.gait)*.48:0;d.legs.forEach((l,i)=>{l.rotation.x=i?a:-a;l.userData.shin.rotation.x=moving?Math.max(0,Math.sin(d.gait+i*Math.PI))*.55:0;});d.arms.forEach((l,i)=>l.rotation.x=i?-a*.7:a*.7);if(g===playerMesh&&window.VillageLife?.carry)d.arms[1].rotation.x=-.35;};
+  function human(g) {
+    const lamp = g.userData.lamp;
+    for (const child of [...g.children]) if (child !== lamp) g.remove(child);
+    g.scale.setScalar(1);
+    const i = humanIndex++,
+      skins = ["#b8815f", "#9c684a", "#ca9571", "#a87351"],
+      skin = material(skins[i % 4]),
+      hair = material(0x302820),
+      cloth = textured(
+        [0xd18053, 0x72a5a0, 0xd9b05b, 0xa188b6, 0x5c8dad][i % 5],
+        "cloth",
+      ),
+      trouser = textured(0xf0e8d5, "cloth"),
+      leather = material(0x4b3d31),
+      legs = [],
+      arms = [];
+    const body = mesh(
+      new T.CylinderGeometry(0.23, 0.26, 0.63, 24),
+      cloth,
+      g,
+      [0, 1.02, 0],
+      [1, 1, 0.68],
+    );
+    oval(g, cloth, 0, 1.27, 0, 0.27, 0.12, 0.17);
+    rod(g, [0, 1.3, 0], [0, 1.48, 0], 0.075, 0.07, skin);
+    const head = mesh(
+      new T.SphereGeometry(
+        1,
+        mobileGraphics ? 20 : 40,
+        mobileGraphics ? 14 : 28,
+      ),
+      faceMaterial(skins[i % 4]),
+      g,
+      [0, 1.61, 0.01],
+      [0.205, 0.245, 0.19],
+    );
+    head.name = "Single friendly ovoid head";
+    mesh(
+      new T.SphereGeometry(
+        1,
+        mobileGraphics ? 16 : 32,
+        mobileGraphics ? 10 : 20,
+        0,
+        Math.PI * 2,
+        0,
+        Math.PI * 0.34,
+      ),
+      hair,
+      g,
+      [0, 1.62, 0.004],
+      [0.212, 0.249, 0.196],
+    );
+    if (i % 3 === 1) oval(g, hair, 0, 1.71, -0.17, 0.13, 0.12, 0.09);
+    for (const side of [-1, 1]) {
+      const leg = new T.Group();
+      leg.position.set(side * 0.115, 0.73, 0);
+      g.add(leg);
+      rod(leg, [0, 0, 0], [0, -0.3, 0], 0.095, 0.073, trouser);
+      const shin = new T.Group();
+      shin.position.y = -0.3;
+      leg.add(shin);
+      rod(shin, [0, 0, 0], [0, -0.32, 0], 0.073, 0.05, trouser);
+      oval(shin, leather, 0, -0.365, 0.065, 0.081, 0.045, 0.14);
+      leg.userData.shin = shin;
+      legs.push(leg);
+      const arm = new T.Group();
+      arm.position.set(side * 0.26, 1.27, 0);
+      g.add(arm);
+      rod(arm, [0, 0, 0], [side * 0.025, -0.25, 0], 0.079, 0.055, cloth);
+      rod(
+        arm,
+        [side * 0.025, -0.25, 0],
+        [side * 0.025, -0.47, 0.045],
+        0.05,
+        0.032,
+        skin,
+      );
+      oval(arm, skin, side * 0.025, -0.49, 0.04, 0.043, 0.065, 0.035);
+      arms.push(arm);
+    }
+    boxAt(g, textured(0xf0d7a8, "cloth"), -0.14, 1.04, 0.18, 0.12, 0.63, 0.025);
+    for (let j = 0; j < 4; j++)
+      oval(g, leather, 0.01, 1.25 - j * 0.075, 0.172, 0.011, 0.011, 0.005);
+    g.userData = {
+      ...g.userData,
+      body,
+      legs,
+      arms,
+      head,
+      cornerRig: true,
+      gait: 0,
+      last: new T.Vector3(),
+    };
+    return g;
+  }
+  const oldPerson = person;
+  person = function (...args) {
+    return human(oldPerson(...args));
+  };
+  human(playerMesh);
+  animatePerson = function (g, t, moving) {
+    if (!g.userData.cornerRig) return;
+    const d = g.userData,
+      dist = d.last.distanceTo(g.position);
+    d.last.copy(g.position);
+    if (moving && dist < 1) d.gait += dist * 5.2;
+    const a = moving ? Math.sin(d.gait) * 0.48 : 0;
+    d.legs.forEach((l, i) => {
+      l.rotation.x = i ? a : -a;
+      l.userData.shin.rotation.x = moving
+        ? Math.max(0, Math.sin(d.gait + i * Math.PI)) * 0.55
+        : 0;
+    });
+    d.arms.forEach((l, i) => (l.rotation.x = i ? -a * 0.7 : a * 0.7));
+    if (g === playerMesh && window.VillageLife?.carry)
+      d.arms[1].rotation.x = -0.35;
+  };
 
   // Four-beat cattle walk. Each hoof plants for 62% of its cycle, then swings forward.
-  const cowRigs=[];
-  for(const [index,cow] of cows.entries()){cow.clear();cow.scale.setScalar(1);const anatomy=new T.Group();cow.add(anatomy);const hide=material(index%2?0xb88b65:0xe8e0cc),dark=material(0x665145),horn=material(0xcbbd95),hoof=material(0x423a32);
-    oval(anatomy,hide,0,1.04,0,.38,.42,.85);oval(anatomy,hide,0,1.18,.5,.32,.42,.34);oval(anatomy,hide,0,1.43,.35,.22,.24,.25);
-    const head=new T.Group();head.position.set(0,1.35,.82);anatomy.add(head);oval(head,hide,0,0,.08,.22,.28,.26);oval(head,dark,0,-.17,.30,.21,.12,.15);
-    for(const side of [-1,1]){oval(head,hide,side*.29,.07,.01,.19,.06,.10);oval(head,material(0x302b26),side*.17,.075,.245,.039,.042,.015);oval(head,material(0xfff8e6),side*.17-.009,.088,.26,.011,.013,.006);tube(head,[[side*.13,.18,0],[side*.18,.37,-.03],[side*.13,.49,.02]],.027,horn);oval(head,hoof,side*.1,-.13,.43,.027,.019,.01);}
-    const legs=[];for(const [i,[x,z]] of [[-.26,-.56],[.26,-.56],[-.26,.52],[.26,.52]].entries()){const root=new T.Group();root.position.set(x,.92,z);anatomy.add(root);const upper=mesh(new T.CylinderGeometry(.055,.088,1,12),hide,root),lower=mesh(new T.CylinderGeometry(.036,.055,1,12),hide,root),foot=oval(root,hoof,0,-.86,0,.075,.06,.1);legs.push({root,upper,lower,foot,offset:[0,.5,.25,.75][i]});}
-    const tail=new T.Group();tail.position.set(0,1.2,-.78);anatomy.add(tail);tube(tail,[[0,0,0],[.04,-.35,-.1],[.09,-.72,-.12]],.018,hide);oval(tail,hoof,.09,-.76,-.12,.04,.10,.04);
-    tube(anatomy,[[-.22,1.36,.70],[0,.98,.83],[.22,1.36,.70]],.015,material(0x984d3b));mesh(new T.ConeGeometry(.07,.11,14),material(0xc39d50,{metalness:.6,roughness:.4}),anatomy,[0,.91,.82]);
-    cowRigs.push({cow,legs,head,tail,phase:0,last:cow.position.clone()});}
-  function segment(m,a,b){const delta=b.clone().sub(a);m.position.copy(a).add(b).multiplyScalar(.5);m.scale.y=delta.length();m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());}
-  function cowGait(r,dt){if(!dt)return;const distance=r.last.distanceTo(r.cow.position);r.last.copy(r.cow.position);const moving=dt>0&&distance>.0001&&distance<1;if(moving)r.phase+=distance/.72;
-    for(const l of r.legs){const phase=(r.phase+l.offset)%1;const stance=phase<.62;const z=moving?(stance?.22-phase/.62*.44:-.22+(phase-.62)/.38*.44):0;const y=-.84+(moving&&!stance?Math.sin((phase-.62)/.38*Math.PI)*.15:0);const foot=new T.Vector3(0,y,z),mid=foot.clone().multiplyScalar(.5);const bend=Math.sqrt(Math.max(0,.45*.45-foot.lengthSq()/4));mid.addScaledVector(new T.Vector3(0,-foot.z,foot.y).normalize(),bend);segment(l.upper,new T.Vector3(),mid);segment(l.lower,mid,foot);l.foot.position.copy(foot);}
-    r.tail.rotation.z=Math.sin(astraTime*1.8)*.12;r.head.rotation.x=moving?Math.sin(r.phase*Math.PI*2)*.025:.12+Math.sin(astraTime*.7)*.10;}
+  const cowRigs = [];
+  for (const [index, cow] of cows.entries()) {
+    cow.clear();
+    cow.scale.setScalar(1);
+    const anatomy = new T.Group();
+    cow.add(anatomy);
+    const hide = material(index % 2 ? 0xb88b65 : 0xe8e0cc),
+      dark = material(0x665145),
+      horn = material(0xcbbd95),
+      hoof = material(0x423a32);
+    oval(anatomy, hide, 0, 1.04, 0, 0.38, 0.42, 0.85);
+    oval(anatomy, hide, 0, 1.18, 0.5, 0.32, 0.42, 0.34);
+    oval(anatomy, hide, 0, 1.43, 0.35, 0.22, 0.24, 0.25);
+    const head = new T.Group();
+    head.position.set(0, 1.35, 0.82);
+    anatomy.add(head);
+    oval(head, hide, 0, 0, 0.08, 0.22, 0.28, 0.26);
+    oval(head, dark, 0, -0.17, 0.3, 0.21, 0.12, 0.15);
+    for (const side of [-1, 1]) {
+      oval(head, hide, side * 0.29, 0.07, 0.01, 0.19, 0.06, 0.1);
+      oval(
+        head,
+        material(0x302b26),
+        side * 0.17,
+        0.075,
+        0.245,
+        0.039,
+        0.042,
+        0.015,
+      );
+      oval(
+        head,
+        material(0xfff8e6),
+        side * 0.17 - 0.009,
+        0.088,
+        0.26,
+        0.011,
+        0.013,
+        0.006,
+      );
+      tube(
+        head,
+        [
+          [side * 0.13, 0.18, 0],
+          [side * 0.18, 0.37, -0.03],
+          [side * 0.13, 0.49, 0.02],
+        ],
+        0.027,
+        horn,
+      );
+      oval(head, hoof, side * 0.1, -0.13, 0.43, 0.027, 0.019, 0.01);
+    }
+    const legs = [];
+    for (const [i, [x, z]] of [
+      [-0.26, -0.56],
+      [0.26, -0.56],
+      [-0.26, 0.52],
+      [0.26, 0.52],
+    ].entries()) {
+      const root = new T.Group();
+      root.position.set(x, 0.92, z);
+      anatomy.add(root);
+      const upper = mesh(
+          new T.CylinderGeometry(0.055, 0.088, 1, 12),
+          hide,
+          root,
+        ),
+        lower = mesh(new T.CylinderGeometry(0.036, 0.055, 1, 12), hide, root),
+        foot = oval(root, hoof, 0, -0.86, 0, 0.075, 0.06, 0.1);
+      legs.push({ root, upper, lower, foot, offset: [0, 0.5, 0.25, 0.75][i] });
+    }
+    const tail = new T.Group();
+    tail.position.set(0, 1.2, -0.78);
+    anatomy.add(tail);
+    tube(
+      tail,
+      [
+        [0, 0, 0],
+        [0.04, -0.35, -0.1],
+        [0.09, -0.72, -0.12],
+      ],
+      0.018,
+      hide,
+    );
+    oval(tail, hoof, 0.09, -0.76, -0.12, 0.04, 0.1, 0.04);
+    tube(
+      anatomy,
+      [
+        [-0.22, 1.36, 0.7],
+        [0, 0.98, 0.83],
+        [0.22, 1.36, 0.7],
+      ],
+      0.015,
+      material(0x984d3b),
+    );
+    mesh(
+      new T.ConeGeometry(0.07, 0.11, 14),
+      material(0xc39d50, { metalness: 0.6, roughness: 0.4 }),
+      anatomy,
+      [0, 0.91, 0.82],
+    );
+    cowRigs.push({
+      cow,
+      legs,
+      head,
+      tail,
+      phase: 0,
+      last: cow.position.clone(),
+    });
+  }
+  function segment(m, a, b) {
+    const delta = b.clone().sub(a);
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.scale.y = delta.length();
+    m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), delta.normalize());
+  }
+  function cowGait(r, dt) {
+    if (!dt) return;
+    const distance = r.last.distanceTo(r.cow.position);
+    r.last.copy(r.cow.position);
+    const moving = dt > 0 && distance > 0.0001 && distance < 1;
+    if (moving) r.phase += distance / 0.72;
+    for (const l of r.legs) {
+      const phase = (r.phase + l.offset) % 1;
+      const stance = phase < 0.62;
+      const z = moving
+        ? stance
+          ? 0.22 - (phase / 0.62) * 0.44
+          : -0.22 + ((phase - 0.62) / 0.38) * 0.44
+        : 0;
+      const y =
+        -0.84 +
+        (moving && !stance
+          ? Math.sin(((phase - 0.62) / 0.38) * Math.PI) * 0.15
+          : 0);
+      const foot = new T.Vector3(0, y, z),
+        mid = foot.clone().multiplyScalar(0.5);
+      const bend = Math.sqrt(Math.max(0, 0.45 * 0.45 - foot.lengthSq() / 4));
+      mid.addScaledVector(new T.Vector3(0, -foot.z, foot.y).normalize(), bend);
+      segment(l.upper, new T.Vector3(), mid);
+      segment(l.lower, mid, foot);
+      l.foot.position.copy(foot);
+    }
+    r.tail.rotation.z = Math.sin(astraTime * 1.8) * 0.12;
+    r.head.rotation.x = moving
+      ? Math.sin(r.phase * Math.PI * 2) * 0.025
+      : 0.12 + Math.sin(astraTime * 0.7) * 0.1;
+  }
 
   // Carry the benchmark's tree and courtyard material language across the village.
-  for(const o of [...scene.children]){if(o===corner||o===playerMesh||cows.includes(o))continue;let foliageOld=false;o.traverse(m=>{if(m.geometry?.type==='DodecahedronGeometry')foliageOld=true;});if(foliageOld&&o.position.x&&o.position.z){o.visible=false;const n=neem.clone();n.position.copy(o.position);n.position.y=groundY(n.position.x,n.position.z);n.scale.setScalar(.8+random()*.6);corner.add(n);}}
-  const gc=groundGeo.attributes.color;if(gc)for(let i=0;i<gc.count;i++){gc.setXYZ(i,gc.getX(i)*.83,gc.getY(i)*.77,gc.getZ(i)*.80);}if(gc)gc.needsUpdate=true;
-  for(const m of [M.wall,M.whitewash,M.ochre,M.bluewash,M.pink,M.cream]){m.bumpMap=maps.plaster;m.bumpScale=.025;m.needsUpdate=true;}
-  const soilCanvas=document.createElement('canvas');soilCanvas.width=soilCanvas.height=512;const sx=soilCanvas.getContext('2d');sx.fillStyle='#eeeeea';sx.fillRect(0,0,512,512);for(let i=0;i<17000;i++){sx.fillStyle=i%3?'#66695312':'#ffffff25';sx.fillRect(random()*512,random()*512,range(1,3),range(1,3));}const soil=new T.CanvasTexture(soilCanvas);soil.wrapS=soil.wrapT=T.RepeatWrapping;soil.repeat.set(180,165);soil.encoding=T.sRGBEncoding;M.grass.map=soil;M.grass.bumpMap=soil;M.grass.bumpScale=.055;M.grass.needsUpdate=true;
-  const meadow=new T.InstancedMesh(bladeGeo,material(0x8b9663,{side:T.DoubleSide}),18000);let mn=0;const links=pathLinks();for(let i=0;i<28000&&mn<18000;i++){const x=range(8,206),z=range(8,182);if(S.buildings.some(b=>Math.hypot(x-b.x/10,z-b.y/10)<(FOOT[b.id]||3)+1.8))continue;if(links.some(([a,b])=>{const ax=a.x/10,az=a.y/10,dx=(b.x-a.x)/10,dz=(b.y-a.y)/10,t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz)));return Math.hypot(x-ax-t*dx,z-az-t*dz)<1.4;}))continue;obj.position.set(x,groundY(x,z)+.015,z);obj.rotation.set(0,range(0,6.28),range(-.3,.3));obj.scale.setScalar(range(.3,1));obj.updateMatrix();meadow.setMatrixAt(mn++,obj.matrix);}meadow.count=mobileGraphics?Math.ceil(mn*.35):mn;corner.add(meadow);
-  M.path.color=color(0xe3d3b4);M.path.map=maps.earth;M.path.bumpMap=maps.earth;M.path.bumpScale=.025;M.path.needsUpdate=true;
-  sun.shadow.mapSize.set(mobileGraphics?1024:4096,mobileGraphics?1024:4096);sun.shadow.normalBias=.025;
-  const henRigs=chickens.map(hen=>{const legs=[];for(const [li,fi,side] of [[4,5,-1],[7,8,1]]){const leg=hen.children[li],foot=hen.children[fi];leg.visible=foot.visible=false;const g=new T.Group();g.position.set(side*.1,.22,0);rod(g,[0,0,0],[0,-.19,0],.016,.011,material(0xc2954f),8);for(let j=-1;j<=1;j++)rod(g,[0,-.19,0],[j*.035,-.21,.095],.009,.006,material(0xc2954f),6);hen.add(g);legs.push(g);}return{hen,legs,last:hen.position.clone(),phase:0};});
-  const oldUpdate=updateAstraWorld;updateAstraWorld=function(dt){oldUpdate(dt);cowRigs.forEach(r=>cowGait(r,dt));for(const r of henRigs){const d=r.last.distanceTo(r.hen.position);r.last.copy(r.hen.position);if(dt&&d>.001&&d<1)r.phase+=d*19;r.legs.forEach((l,i)=>l.rotation.x=dt&&d>.001?Math.sin(r.phase+i*Math.PI)*.5:0);}foliage.rotation.z=Math.sin(astraTime*.55)*.006;if(window.VillageLife)VillageLife.update(dt);};
-  const originalGroundHeight=groundY;groundY=function(x,z){const radius=Math.hypot((x-111)/29,(z-82)/27)*256;return originalGroundHeight(x,z)+.12*Math.max(0,Math.min(1,(128-radius)/58));};
-  tree=function(scale=1){const n=neem.clone();n.position.set(0,0,0);n.scale.setScalar(scale*.65);return n;};
-  window.WorldArt={human,cowRigs,house:detailedHouse,material,mesh,boxAt,oval,rod,tube,P,corner};
+  for (const o of [...scene.children]) {
+    if (o === corner || o === playerMesh || cows.includes(o)) continue;
+    let foliageOld = false;
+    o.traverse((m) => {
+      if (m.geometry?.type === "DodecahedronGeometry") foliageOld = true;
+    });
+    if (
+      o.userData.kind === "tree" &&
+      foliageOld &&
+      o.position.x &&
+      o.position.z
+    ) {
+      o.visible = false;
+      const n = neem.clone();
+      n.position.copy(o.position);
+      n.position.y = groundY(n.position.x, n.position.z);
+      n.scale.setScalar(0.8 + random() * 0.6);
+      corner.add(n);
+    }
+  }
+  const gc = groundGeo.attributes.color;
+  if (gc)
+    for (let i = 0; i < gc.count; i++) {
+      gc.setXYZ(i, gc.getX(i) * 0.83, gc.getY(i) * 0.77, gc.getZ(i) * 0.8);
+    }
+  if (gc) gc.needsUpdate = true;
+  for (const m of [M.wall, M.whitewash, M.ochre, M.bluewash, M.pink, M.cream]) {
+    m.bumpMap = maps.plaster;
+    m.bumpScale = 0.025;
+    m.needsUpdate = true;
+  }
+  const soilCanvas = document.createElement("canvas");
+  soilCanvas.width = soilCanvas.height = 512;
+  const sx = soilCanvas.getContext("2d");
+  sx.fillStyle = "#eeeeea";
+  sx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 17000; i++) {
+    sx.fillStyle = i % 3 ? "#66695312" : "#ffffff25";
+    sx.fillRect(random() * 512, random() * 512, range(1, 3), range(1, 3));
+  }
+  const soil = new T.CanvasTexture(soilCanvas);
+  soil.wrapS = soil.wrapT = T.RepeatWrapping;
+  soil.repeat.set(180, 165);
+  soil.colorSpace = T.SRGBColorSpace;
+  M.grass.map = soil;
+  M.grass.bumpMap = soil;
+  M.grass.bumpScale = 0.055;
+  M.grass.needsUpdate = true;
+  const meadow = new T.InstancedMesh(
+    bladeGeo,
+    material(0x8b9663, { side: T.DoubleSide }),
+    18000,
+  );
+  let mn = 0;
+  const links = pathLinks();
+  for (let i = 0; i < 28000 && mn < 18000; i++) {
+    const x = range(8, 206),
+      z = range(8, 182);
+    if (
+      S.buildings.some(
+        (b) => Math.hypot(x - b.x / 10, z - b.y / 10) < (FOOT[b.id] || 3) + 1.8,
+      )
+    )
+      continue;
+    if (
+      links.some(([a, b]) => {
+        const ax = a.x / 10,
+          az = a.y / 10,
+          dx = (b.x - a.x) / 10,
+          dz = (b.y - a.y) / 10,
+          t = Math.max(
+            0,
+            Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)),
+          );
+        return Math.hypot(x - ax - t * dx, z - az - t * dz) < 1.4;
+      })
+    )
+      continue;
+    obj.position.set(x, groundY(x, z) + 0.015, z);
+    obj.rotation.set(0, range(0, 6.28), range(-0.3, 0.3));
+    obj.scale.setScalar(range(0.3, 1));
+    obj.updateMatrix();
+    meadow.setMatrixAt(mn++, obj.matrix);
+  }
+  meadow.count = mobileGraphics ? Math.ceil(mn * 0.35) : mn;
+  corner.add(meadow);
+  M.path.color = color(0xe3d3b4);
+  M.path.map = maps.earth;
+  M.path.bumpMap = maps.earth;
+  M.path.bumpScale = 0.025;
+  M.path.needsUpdate = true;
+  sun.shadow.mapSize.set(
+    mobileGraphics ? 1024 : 4096,
+    mobileGraphics ? 1024 : 4096,
+  );
+  sun.shadow.normalBias = 0.025;
+  const henRigs = chickens.map((hen) => {
+    const legs = [];
+    for (const [li, fi, side] of [
+      [4, 5, -1],
+      [7, 8, 1],
+    ]) {
+      const leg = hen.children[li],
+        foot = hen.children[fi];
+      leg.visible = foot.visible = false;
+      const g = new T.Group();
+      g.position.set(side * 0.1, 0.22, 0);
+      rod(g, [0, 0, 0], [0, -0.19, 0], 0.016, 0.011, material(0xc2954f), 8);
+      for (let j = -1; j <= 1; j++)
+        rod(
+          g,
+          [0, -0.19, 0],
+          [j * 0.035, -0.21, 0.095],
+          0.009,
+          0.006,
+          material(0xc2954f),
+          6,
+        );
+      hen.add(g);
+      legs.push(g);
+    }
+    return { hen, legs, last: hen.position.clone(), phase: 0 };
+  });
+  GameSystems.world.push(function updateArt(dt) {
+    if (S.scene !== "village") {
+      if (window.VillageLife) VillageLife.update(dt);
+      return;
+    }
+    cowRigs.forEach((r) => cowGait(r, dt));
+    for (const r of henRigs) {
+      const d = r.last.distanceTo(r.hen.position);
+      r.last.copy(r.hen.position);
+      if (dt && d > 0.001 && d < 1) r.phase += d * 19;
+      r.legs.forEach(
+        (l, i) =>
+          (l.rotation.x =
+            dt && d > 0.001 ? Math.sin(r.phase + i * Math.PI) * 0.5 : 0),
+      );
+    }
+    foliage.rotation.z = Math.sin(astraTime * 0.55) * 0.006;
+    if (window.VillageLife) VillageLife.update(dt);
+  });
+  const originalGroundHeight = groundY;
+  groundY = function (x, z) {
+    const radius = Math.hypot((x - 111) / 29, (z - 82) / 27) * 256;
+    return (
+      originalGroundHeight(x, z) +
+      0.12 * Math.max(0, Math.min(1, (128 - radius) / 58))
+    );
+  };
+  tree = function (scale = 1) {
+    const n = neem.clone();
+    n.position.set(0, 0, 0);
+    n.scale.setScalar(scale * 0.65);
+    return n;
+  };
+  window.WorldArt = {
+    human,
+    cowRigs,
+    house: detailedHouse,
+    material,
+    mesh,
+    boxAt,
+    oval,
+    rod,
+    tube,
+    P,
+    corner,
+  };
 })();

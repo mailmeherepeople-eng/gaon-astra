@@ -1,3 +1,5 @@
+> Historical snapshot. For current behavior and release checks, start with [README.md](README.md). The September repair report supersedes implementation status in this document.
+
 # Pump corner: a playable graphics benchmark
 
 **Historical benchmark.** Its shared visual treatment has now been expanded in `world-art.js`. The corner shortcut has been retired; start or continue the full village at `http://127.0.0.1:8773/`. See `POLISH-PASS.md` for the current implementation.

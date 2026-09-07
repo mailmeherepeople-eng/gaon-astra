@@ -1,10 +1,119 @@
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');const assert=require('node:assert/strict');const fs=require('node:fs');fs.mkdirSync('qa',{recursive:true});
-(async()=>{const browser=await chromium.launch({headless:true,channel:'msedge'});const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(process.env.ASTRA_URL||'http://127.0.0.1:8773');await page.locator('#beginVillage').click();await page.waitForTimeout(800);
-await page.evaluate(()=>{S.player.x=1110;S.player.y=805;S.player.face=0;cam.dist=5.5;cam.pitch=.2;cam.yaw=0;});await page.waitForTimeout(400);await page.screenshot({path:'qa/friendly-character.png'});
-assert.equal(await page.evaluate(()=>[playerMesh,...vil].every(g=>g.userData.head?.name==='Single friendly ovoid head'&&g.scale.y===1)),true);
-await page.evaluate(()=>{const c=cows[0];S.player.x=c.position.x*10;S.player.y=c.position.z*10+30;cam.dist=6;cam.yaw=.7;cam.pitch=.3;});await page.waitForTimeout(500);await page.screenshot({path:'qa/cattle.png'});
-const phases=await page.evaluate(()=>WorldArt.cowRigs.map(r=>r.phase));await page.waitForTimeout(1000);assert.equal(await page.evaluate(p=>WorldArt.cowRigs.some((r,i)=>r.phase>p[i]),phases),true);
-await page.click('#journalButton');await page.click('[data-lesson="lesson-8"]');await page.click('#recall');await page.locator('[data-answer]').filter({hasText:'The Gram Sabha includes'}).click();assert.ok((await page.locator('#feedback').innerText()).length>10);await page.click('#noteBack');await page.click('#write');await page.fill('#written','The Gram Sabha includes all adult voters. The Panchayat is elected and accountable to it.');await page.click('#reveal');await page.screenshot({path:'qa/journal-polish.png'});await page.click('#closeJournal');
-await page.evaluate(()=>enterRoom(HOME));await page.waitForTimeout(800);for(const yaw of [0,1.57,3.14,4.71]){await page.evaluate(y=>{cam.yaw=y;cam.dist=13;cam.pitch=.8;},yaw);await page.waitForTimeout(150);assert.ok(await page.evaluate(()=>S.room.cutaway.some(o=>!o.visible)));}await page.screenshot({path:'qa/cutaway-interior.png'});await page.evaluate(()=>leaveRoom(true));
-const generated=await page.evaluate(()=>{const result=[];for(const id of Object.keys(B)){const g=buildingMesh(id,{id,x:1800,y:1400,hp:3});scene.add(g);g.position.set(180,0,140);renderer.render(scene,camera);result.push(id);scene.remove(g);}return result;});assert.ok(generated.length>=18);
-await page.setViewportSize({width:390,height:844});await page.click('#mobileMenu');await page.click('[data-tool="trailsButton"]');await page.screenshot({path:'qa/mobile-jobs.png'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(errors,[]);await browser.close();console.log('Smoke PASS: faces, animated cows, journal, cutaways, all buildings, mobile layout.');})();
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+fs.mkdirSync("qa", { recursive: true });
+(async () => {
+  const browser = await chromium.launch({
+    headless: true,
+    channel: process.env.PLAYWRIGHT_CHANNEL || "msedge",
+  });
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+  });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(process.env.ASTRA_URL || "http://127.0.0.1:8773");
+  await page.locator("#beginVillage").click();
+  await page.waitForTimeout(800);
+  await page.evaluate(() => {
+    S.player.x = 1110;
+    S.player.y = 805;
+    S.player.face = 0;
+    cam.dist = 5.5;
+    cam.pitch = 0.2;
+    cam.yaw = 0;
+  });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "qa/friendly-character.png" });
+  assert.equal(
+    await page.evaluate(() =>
+      [playerMesh, ...vil].every(
+        (g) =>
+          g.userData.head?.name === "Single friendly ovoid head" &&
+          g.scale.y === 1,
+      ),
+    ),
+    true,
+  );
+  await page.evaluate(() => {
+    const c = cows[0];
+    S.player.x = c.position.x * 10;
+    S.player.y = c.position.z * 10 + 30;
+    cam.dist = 6;
+    cam.yaw = 0.7;
+    cam.pitch = 0.3;
+  });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: "qa/cattle.png" });
+  const phases = await page.evaluate(() =>
+    WorldArt.cowRigs.map((r) => r.phase),
+  );
+  await page.waitForTimeout(1000);
+  assert.equal(
+    await page.evaluate(
+      (p) => WorldArt.cowRigs.some((r, i) => r.phase > p[i]),
+      phases,
+    ),
+    true,
+  );
+  await page.click("#journalButton");
+  await page.click('[data-lesson="lesson-8"]');
+  await page.click("#recall");
+  await page
+    .locator("[data-answer]")
+    .filter({ hasText: "The Gram Sabha includes" })
+    .click();
+  assert.ok((await page.locator("#feedback").innerText()).length > 10);
+  await page.click("#noteBack");
+  await page.click("#write");
+  await page.fill(
+    "#written",
+    "The Gram Sabha includes all adult voters. The Panchayat is elected and accountable to it.",
+  );
+  await page.click("#reveal");
+  await page.screenshot({ path: "qa/journal-polish.png" });
+  await page.click("#closeJournal");
+  await page.evaluate(() => enterRoom(HOME));
+  await page.waitForTimeout(800);
+  for (const yaw of [0, 1.57, 3.14, 4.71]) {
+    await page.evaluate((y) => {
+      cam.yaw = y;
+      cam.dist = 13;
+      cam.pitch = 0.8;
+    }, yaw);
+    await page.waitForTimeout(150);
+    assert.ok(
+      await page.evaluate(() => S.room.cutaway.some((o) => !o.visible)),
+    );
+  }
+  await page.screenshot({ path: "qa/cutaway-interior.png" });
+  await page.evaluate(() => leaveRoom(true));
+  const generated = await page.evaluate(() => {
+    const result = [];
+    for (const id of Object.keys(B)) {
+      const g = buildingMesh(id, { id, x: 1800, y: 1400, hp: 3 });
+      scene.add(g);
+      g.position.set(180, 0, 140);
+      renderer.render(scene, camera);
+      result.push(id);
+      scene.remove(g);
+    }
+    return result;
+  });
+  assert.ok(generated.length >= 18);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click("#mobileMenu");
+  await page.click('[data-tool="trailsButton"]');
+  await page.screenshot({ path: "qa/mobile-jobs.png" });
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  assert.deepEqual(errors, []);
+  await browser.close();
+  console.log(
+    "Smoke PASS: faces, animated cows, journal, cutaways, all buildings, mobile layout.",
+  );
+})();

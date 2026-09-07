@@ -1,0 +1,116 @@
+{
+  "intro": {
+    "resources": [
+      {
+        "name": "css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:wght@500&display=swap",
+        "bytes": 0,
+        "duration": 1
+      },
+      {
+        "name": "astra.css",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "three.min.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "audio.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "lessons.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "astra.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "world-art.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "village-life.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "mobile-ui.js",
+        "bytes": 0,
+        "duration": 0
+      },
+      {
+        "name": "speech-ui.js",
+        "bytes": 0,
+        "duration": 0
+      }
+    ],
+    "controls": {
+      "runTouch": false,
+      "zoomTouch": false,
+      "villagers": 15,
+      "residentNaresh": true
+    }
+  },
+  "sleep": {
+    "phase": "day",
+    "asleep": false,
+    "sleepOverlay": true
+  },
+  "pointerCancel": {
+    "acting": true,
+    "actEdge": true
+  },
+  "nightElection": {
+    "rank": 1,
+    "dayLen": 180,
+    "nightLen": 100,
+    "home": "home"
+  },
+  "petitions": {
+    "pendingButton": {
+      "label": "Send petition",
+      "disabled": false,
+      "hidden": true
+    },
+    "count": 1
+  },
+  "plannerMap": {
+    "width": 336,
+    "height": 215.109375,
+    "plotHitRadiusCss": 11.946666666666667
+  },
+  "plannerObservers": {
+    "observers": 5,
+    "detachedObserved": 5
+  },
+  "memory": {
+    "before": 145,
+    "after": 241
+  },
+  "saveClaim": {
+    "menu": true
+  },
+  "longSpeech": {
+    "bubble": {
+      "x": 276,
+      "y": 68,
+      "w": 280,
+      "h": 266.65625
+    },
+    "viewport": {
+      "w": 568,
+      "h": 320
+    },
+    "overflows": true,
+    "overlapJump": true
+  },
+  "errors": []
+}

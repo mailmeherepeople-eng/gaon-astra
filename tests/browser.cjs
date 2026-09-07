@@ -16,9 +16,22 @@ const chromium = {
         : options.args,
     });
     const context = browser.newContext.bind(browser);
+    const observed = new WeakSet();
     const debug = (page) => {
-      if (!process.env.CI) return;
+      if (!process.env.CI || observed.has(page)) return;
+      observed.add(page);
       page.setDefaultTimeout(90000);
+      // Wall-clock delays alone do not guarantee a render on a CPU-only runner.
+      const wait = page.waitForTimeout.bind(page);
+      page.waitForTimeout = async (ms) => {
+        await wait(ms);
+        await page.evaluate(
+          () =>
+            new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            ),
+        );
+      };
       page.on("pageerror", (error) =>
         console.error("Browser error:", error.message),
       );

@@ -94,9 +94,7 @@ fs.mkdirSync("qa", { recursive: true });
       cam.pitch = 0.8;
     }, yaw);
     await page.waitForTimeout(150);
-    assert.ok(
-      await page.evaluate(() => S.room.cutaway.some((o) => !o.visible)),
-    );
+    await page.waitForFunction(() => S.room?.cutaway.some((o) => !o.visible));
   }
   await page.screenshot({ path: "qa/cutaway-interior.png" });
   await page.evaluate(() => leaveRoom(true));

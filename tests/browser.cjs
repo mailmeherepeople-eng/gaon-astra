@@ -16,6 +16,17 @@ const chromium = {
         : options.args,
     });
     const context = browser.newContext.bind(browser);
+    const configure = async (target) => {
+      if (process.env.ASTRA_TEST_RENDER_SCALE)
+        await target.addInitScript(
+          (scale) =>
+            Object.defineProperty(window, "devicePixelRatio", {
+              configurable: true,
+              get: () => scale,
+            }),
+          Number(process.env.ASTRA_TEST_RENDER_SCALE),
+        );
+    };
     const observed = new WeakSet();
     const debug = (page) => {
       if (!process.env.CI || observed.has(page)) return;
@@ -42,6 +53,7 @@ const chromium = {
     };
     browser.newContext = async (options) => {
       const value = await context(options);
+      await configure(value);
       value.on("page", debug);
       if (process.env.ASTRA_TEST_QUALITY)
         await value.addInitScript((quality) => {
@@ -55,6 +67,7 @@ const chromium = {
     const page = browser.newPage.bind(browser);
     browser.newPage = async (options) => {
       const value = await page(options);
+      await configure(value);
       debug(value);
       if (process.env.ASTRA_TEST_QUALITY)
         await value.addInitScript((quality) => {

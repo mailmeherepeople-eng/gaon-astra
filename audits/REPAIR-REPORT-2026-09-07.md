@@ -131,3 +131,5 @@ Representative phone-emulation outdoor observations: **191–459 calls and 93,83
 All code changes above are implemented. The external validation limits are deliberately left open; passing desktop automation cannot substitute for those results.
 
 CI uses explicit SwiftShader and Low quality for functional checks on runners without a physical GPU. Local validation covers both phone Low and desktop High. The first CI attempt timed out on the default software graphics path; the test launcher now makes this environment difference explicit.
+
+The Linux CI runner uses a 0.35 render pixel ratio for its real WebGL framebuffer, keeping the full CSS viewport and UI. This avoids treating CPU rasterization speed as a gameplay timer assertion. Normal-resolution Low/High rendering is checked locally; CI is functional coverage, not the performance benchmark.

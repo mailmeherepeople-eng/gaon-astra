@@ -72,3 +72,5 @@ The complete check runs smoke, gameplay/save integration, seven phone sizes, thr
 The renderer is covered by [its MIT license](vendor/THREE-LICENSE.txt). Textbook PDFs remain local and excluded from Git. Physical-phone performance, Safari behavior, sustained thermal behavior and student outcomes require testing beyond desktop emulation.
 
 CI uses explicit SwiftShader and Low quality for functional checks on runners without a physical GPU. Local validation covers both phone Low and desktop High. The first CI attempt timed out on the default software graphics path; the test launcher now makes this environment difference explicit.
+
+The Linux CI runner uses a 0.35 render pixel ratio for its real WebGL framebuffer, keeping the full CSS viewport and UI. This avoids treating CPU rasterization speed as a gameplay timer assertion. Normal-resolution Low/High rendering is checked locally; CI is functional coverage, not the performance benchmark.

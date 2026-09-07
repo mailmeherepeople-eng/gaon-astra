@@ -24,7 +24,7 @@ const assert = require("node:assert/strict");
     await page.keyboard.press("e");
     await page.waitForTimeout(wait);
     await page.waitForFunction(
-      () => !document.querySelector("#prompt progress"),
+      () => !document.querySelector("#prompt:not(.hidden) progress"),
       null,
       { timeout: 60000 },
     );

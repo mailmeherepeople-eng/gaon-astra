@@ -39,10 +39,10 @@ The new async import test waits for validation to finish rather than assuming a 
 
 Updated ten-scenario benchmark data: [raw results](fixes-2026-09-08/benchmark-results.json). Starting-view observations were 108 draw calls in phone emulation and 1,047 on desktop High. Scene randomness means these are observations, not strict before/after guarantees. Desktop emulation does not establish physical-phone FPS, battery use or thermal performance.
 
-Screenshots: [320-pixel planner](../qa/fixed-planner-320.png), [390-pixel planner](../qa/fixed-planner-390.png), [phone Sabha](../qa/fixed-sabha-phone.png). Earlier user screenshots were preserved; broad test output was generated in a separate temporary copy.
+Screenshots: [320-pixel planner](../qa/fixed-planner-320.png), [390-pixel planner](../qa/fixed-planner-390.png), [phone Sabha](../qa/fixed-sabha-phone.png), [landscape Sabha](../qa/fixed-sabha-landscape.png). Existing source changes were preserved. Broad test output was generated in a separate temporary copy; focused checks refreshed related QA screenshots. Unrelated generated QA changes were left uncommitted.
 
 ## Remaining limits
 
 Physical Android/iPhone/Safari and low-end laptop sessions still need hands-on validation. The tutorial's first election is an earned fixed 12/15 result; daily errands and the market story remain authored gameplay. The quality governor changes resolution/shadows rather than rebuilding the initially selected geometry tier. The project still has a large shared simulation module; this patch centralizes the rules responsible for the audited regressions without attempting a complete engine rewrite.
 
-Hosted CI and deployment results are reported with the release once available.
+All four hosted groups passed for runtime commit `c9ab515`: [GitHub run 34153575034](https://github.com/mailmeherepeople-eng/gaon-astra/actions/runs/34153575034). The final report-only commit changes no runtime files. Publication uses the existing GitHub Pages main-branch deployment; the live result is checked after the update.

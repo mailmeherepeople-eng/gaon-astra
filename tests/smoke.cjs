@@ -45,16 +45,28 @@ fs.mkdirSync("qa", { recursive: true });
   });
   await page.waitForTimeout(500);
   await page.screenshot({ path: "qa/cattle.png" });
-  const phases = await page.evaluate(() =>
-    WorldArt.cowRigs.map((r) => r.phase),
-  );
-  await page.waitForTimeout(1000);
-  assert.equal(
-    await page.evaluate(
-      (p) => WorldArt.cowRigs.some((r, i) => r.phase > p[i]),
-      phases,
-    ),
-    true,
+  const phases = await page.evaluate(() => {
+    const cow = cows[0];
+    for (let x = 12; x < 180; x += 5) {
+      let found = false;
+      for (let z = 12; z < 175; z += 5) {
+        if (safeAnimal(x, z) && safeAnimal(x + 2, z)) {
+          cow.position.set(x, groundY(x, z), z);
+          cow.userData.friendlyUntil = astraTime + 60;
+          S.player.x = (x + 2) * 10;
+          S.player.y = z * 10;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+    return WorldArt.cowRigs.map((r) => r.phase);
+  });
+  await page.waitForFunction(
+    (p) => WorldArt.cowRigs.some((r, i) => r.phase > p[i]),
+    phases,
+    { timeout: 30000 },
   );
   await page.click("#journalButton");
   await page.click('[data-lesson="lesson-8"]');

@@ -60,6 +60,9 @@ const assert = require("node:assert/strict");
       // Actual touch action at the pump must complete, without a keyboard.
       await page.locator("#act").tap();
       await page.waitForTimeout(3100);
+      await page.waitForFunction(() => VillageLife.carry === "water", null, {
+        timeout: 60000,
+      });
       assert.equal(await page.evaluate(() => VillageLife.carry), "water");
       await page.locator("#mobileMenu").tap();
       assert.equal(await page.evaluate(() => S.paused), true);

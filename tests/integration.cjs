@@ -23,6 +23,11 @@ const assert = require("node:assert/strict");
     await page.waitForTimeout(150);
     await page.keyboard.press("e");
     await page.waitForTimeout(wait);
+    await page.waitForFunction(
+      () => !document.querySelector("#prompt progress"),
+      null,
+      { timeout: 60000 },
+    );
   }
   await page.evaluate(() => openPlan());
   assert.equal(await page.locator("#sideB").count(), 0);

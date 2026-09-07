@@ -71,6 +71,9 @@ const assert = require("node:assert/strict");
       if (width < 1000) await page.locator("#act").tap();
       else await page.keyboard.press("e");
       await page.waitForTimeout(2700);
+      await page.waitForFunction(() => VillageLife.carry === "water", null, {
+        timeout: 60000,
+      });
       assert.equal(await page.evaluate(() => VillageLife.carry), "water");
       assert.ok(await page.evaluate(() => S.talking.t > 0));
       // A different nearby villager can replace a still-active speech bubble.

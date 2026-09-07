@@ -59,18 +59,6 @@ toolsBar.setAttribute("aria-label", "Village tools");
 toolsBar.innerHTML =
   '<button id="journalButton">Field journal · J</button><button id="trailsButton">Village trails</button>';
 document.body.appendChild(toolsBar);
-const soundButton = document.createElement("button");
-soundButton.id = "soundButton";
-toolsBar.appendChild(soundButton);
-function soundLabel() {
-  soundButton.textContent = Gaon.audio.muted ? "Sound off" : "Sound on";
-  soundButton.setAttribute("aria-pressed", String(!Gaon.audio.muted));
-}
-soundLabel();
-soundButton.onclick = () => {
-  Gaon.audio.toggle();
-  soundLabel();
-};
 document.addEventListener("click", (e) => {
   if (e.target.closest("button") && e.target.id !== "soundButton")
     Gaon.audio.play("click");

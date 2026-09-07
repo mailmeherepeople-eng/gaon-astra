@@ -1,0 +1,177 @@
+{
+  "date": "2026-09-07T18:46:50.581Z",
+  "browser": "152.0.4191.66",
+  "note": "Headless desktop browser, not physical-phone frame times. 900 ms warm-up per scenario, 90 RAF samples.",
+  "results": [
+    {
+      "profile": "phone emulation",
+      "scenario": "start",
+      "medianMs": 6.900000000000091,
+      "p95Ms": 7.200000000000273,
+      "calls": 108,
+      "triangles": 102258,
+      "geometries": 225,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 9,
+        "pitch": 0.45,
+        "yaw": -0.12435499454676144
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "pump",
+      "medianMs": 7,
+      "p95Ms": 7.199999999999818,
+      "calls": 101,
+      "triangles": 100868,
+      "geometries": 225,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 7,
+        "pitch": 0.3,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "crowded",
+      "medianMs": 6.899999999999636,
+      "p95Ms": 7.199999999999818,
+      "calls": 325,
+      "triangles": 130387,
+      "geometries": 718,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "night",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7.199999999999818,
+      "calls": 163,
+      "triangles": 110165,
+      "geometries": 719,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "phone emulation",
+      "scenario": "interior",
+      "medianMs": 6.899999999999636,
+      "p95Ms": 7.200000000000728,
+      "calls": 54,
+      "triangles": 3606,
+      "geometries": 745,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "low",
+      "camera": {
+        "distance": 10,
+        "pitch": 0.68,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "start",
+      "medianMs": 6.900000000000091,
+      "p95Ms": 7.200000000000273,
+      "calls": 1047,
+      "triangles": 408646,
+      "geometries": 802,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 9,
+        "pitch": 0.45,
+        "yaw": -0.12435499454676144
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "pump",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7.100000000000364,
+      "calls": 968,
+      "triangles": 397104,
+      "geometries": 802,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 7,
+        "pitch": 0.3,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "crowded",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7.199999999999818,
+      "calls": 1640,
+      "triangles": 634507,
+      "geometries": 953,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "night",
+      "medianMs": 6.900000000000546,
+      "p95Ms": 7.199999999999818,
+      "calls": 990,
+      "triangles": 370571,
+      "geometries": 954,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 12,
+        "pitch": 0.45,
+        "yaw": 0
+      }
+    },
+    {
+      "profile": "desktop",
+      "scenario": "interior",
+      "medianMs": 6.900000000001455,
+      "p95Ms": 7.199999999998909,
+      "calls": 110,
+      "triangles": 18754,
+      "geometries": 980,
+      "dpr": 1,
+      "revision": "185",
+      "quality": "high",
+      "camera": {
+        "distance": 10,
+        "pitch": 0.68,
+        "yaw": 0
+      }
+    }
+  ]
+}

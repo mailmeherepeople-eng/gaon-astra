@@ -56,7 +56,7 @@
   function apply() {
     const p = profiles[level];
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, p.dpr));
-    renderer.setSize(innerWidth, innerHeight);
+    renderer.setSize(innerWidth, innerHeight, false);
     renderer.shadowMap.enabled = !!p.shadow;
     // Concentrate the shadow budget around the player instead of a 180 m square.
     const reach = level === 2 ? 32 : 24;
@@ -169,13 +169,20 @@
   function settings() {
     const result = VillageLife.save();
     screen(
-      `<div class="journal-head"><h2>Settings & saves</h2><button id="settingsBack">Resume ×</button></div><p role="status">${esc(result.message)}</p><label for="qualitySelect">Graphics quality</label><select id="qualitySelect"><option value="auto">Auto · adapts to performance</option><option value="low">Low · lighter graphics</option><option value="high">High · richer shadows</option></select><label for="cameraZoom">Camera distance</label><input id="cameraZoom" type="range" min="4" max="35" value="${Math.min(cam.dist, 35)}"><button id="runSetting" class="ghost">${S.autoRun ? "Walk" : "Run"} while moving</button><button id="exportVillage" class="ghost">Export village backup</button><label for="importVillage">Restore a village backup (replaces this village)</label><input id="importVillage" type="file" accept="application/json,.json"><p id="importStatus" role="status"></p><p class="source">Use your browser zoom to enlarge text. On touchscreens, drag left to move and right to look. The journal keeps recent conversations.</p>`,
+      `<div class="journal-head"><h2>Settings & saves</h2><button id="settingsBack">Resume ×</button></div><p role="status">${esc(result.message)}</p><label for="qualitySelect">Graphics quality</label><select id="qualitySelect"><option value="auto">Auto · adapts to performance</option><option value="low">Low · lighter graphics</option><option value="high">High · richer shadows</option></select><button id="soundButton" class="ghost" aria-pressed="${!Gaon.audio.muted}">${Gaon.audio.muted ? "Sound off · turn on" : "Sound on · mute"}</button><label for="cameraZoom">Camera distance</label><input id="cameraZoom" type="range" min="4" max="35" value="${Math.min(cam.dist, 35)}"><button id="runSetting" class="ghost">${S.autoRun ? "Walk" : "Run"} while moving</button><button id="exportVillage" class="ghost">Export village backup</button><label for="importVillage">Restore a village backup (replaces this village)</label><input id="importVillage" type="file" accept="application/json,.json"><p id="importStatus" role="status"></p><p class="source">Use your browser zoom to enlarge text. On touchscreens, drag left to move and right to look. The journal keeps recent conversations.</p>`,
       true,
     );
     document.getElementById("settingsBack").onclick = closeScreen;
     const select = document.getElementById("qualitySelect");
     select.value = mode;
     select.onchange = () => set(select.value);
+    document.getElementById("soundButton").onclick = (e) => {
+      Gaon.audio.toggle();
+      e.target.textContent = Gaon.audio.muted
+        ? "Sound off · turn on"
+        : "Sound on · mute";
+      e.target.setAttribute("aria-pressed", String(!Gaon.audio.muted));
+    };
     document.getElementById("cameraZoom").oninput = (e) => {
       cam.dist = +e.target.value;
       cam.pitch = Math.max(cam.pitch, pitchMin(cam.dist));

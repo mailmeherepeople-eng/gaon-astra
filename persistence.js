@@ -4,12 +4,190 @@
     backupKey = key + "-backup";
   let lastSaved = null,
     latest = null;
+  // The same allowlist governs serialization and restoration. Runtime objects,
+  // functions, camera state and scene references can never be imported.
+  const fields = [
+    "day",
+    "t",
+    "phase",
+    "coins",
+    "treasury",
+    "grain",
+    "milk",
+    "wood",
+    "flour",
+    "chairs",
+    "pop",
+    "happy",
+    "approval",
+    "rank",
+    "age",
+    "policies",
+    "petitions",
+    "buildings",
+    "res",
+    "homeId",
+    "collected",
+    "lastElection",
+    "subsidy",
+    "resolution",
+    "problems",
+    "sabhaDone",
+    "awake",
+    "dayThiefDone",
+    "reported",
+    "night",
+    "mandateLost",
+    "lastDawn",
+    "finishedAtDusk",
+  ];
+  const record = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const integer = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+  const knownName = (n) =>
+    NAMES.some((v) => v.n === n) || ["Devi Lal", NPC_SARPANCH].includes(n);
+  const point = (v) =>
+    record(v) &&
+    Number.isFinite(v.x) &&
+    Number.isFinite(v.y) &&
+    v.x >= 0 &&
+    v.x <= W &&
+    v.y >= 0 &&
+    v.y <= H;
+  const resolution = (v) =>
+    v == null ||
+    ["watch", "drain", "cleanup", "doctor", "patwari", "nothing"].includes(v) ||
+    (typeof v === "string" &&
+      v.startsWith("fund:") &&
+      Object.hasOwn(B, v.slice(5)));
+  function safeData(v, depth = 0) {
+    if (depth > 12) return false;
+    if (v == null || typeof v === "boolean") return true;
+    if (typeof v === "number") return Number.isFinite(v) && Math.abs(v) <= 1e9;
+    if (typeof v === "string") return v.length <= 2000 && !/[<>]/.test(v);
+    if (Array.isArray(v))
+      return v.length <= 256 && v.every((x) => safeData(x, depth + 1));
+    if (!record(v) || Object.keys(v).length > 256) return false;
+    return Object.entries(v).every(
+      ([k, x]) =>
+        !["__proto__", "constructor", "prototype"].includes(k) &&
+        !/[<>]/.test(k) &&
+        safeData(x, depth + 1),
+    );
+  }
+  function validSummary(v) {
+    if (v == null) return true; // Saves made before accounts existed remain compatible.
+    if (!record(v)) return false;
+    const numbers = [
+      "day",
+      "happyBefore",
+      "happyAfter",
+      "approvalBefore",
+      "approvalAfter",
+      "grain",
+      "milk",
+      "wood",
+      "flour",
+      "chairs",
+      "eat",
+      "spoiled",
+      "income",
+      "jobs",
+      "workers",
+      "finished",
+    ];
+    return (
+      numbers.every((k) => Number.isFinite(v[k])) &&
+      ["notes", "happyReasons", "approvalReasons"].every(
+        (k) => Array.isArray(v[k]) && v[k].every((s) => typeof s === "string"),
+      ) &&
+      Array.isArray(v.sales) &&
+      v.sales.every(
+        (s) =>
+          record(s) &&
+          ["grain", "milk", "wood", "flour", "chairs"].includes(s.k) &&
+          Number.isFinite(s.amt) &&
+          Number.isFinite(s.got),
+      ) &&
+      resolution(v.resolution) &&
+      (v.age == null ||
+        AGES.some((a) => a.n === v.age.n && a.unlock === v.age.unlock))
+    );
+  }
   function validate(p) {
-    if (p?.v !== 2 || !p.state || !p.sim) return false;
+    if (p?.v !== 2 || !record(p.state) || !record(p.sim) || !safeData(p))
+      return false;
     const s = p.sim,
       state = p.state;
     if (
+      Object.keys(state).some(
+        (k) =>
+          ![
+            "done",
+            "carry",
+            "litter",
+            "loads",
+            "selected",
+            "daily",
+            "story",
+            "told",
+          ].includes(k),
+      )
+    )
+      return false;
+    if (
+      !integer(s.rank, 0, RANKS.length - 1) ||
+      !integer(s.age, 0, AGES.length - 1) ||
+      !integer(s.day, 1, 1e9) ||
+      !integer(s.pop, 0, 256) ||
+      !integer(state.loads, 0, 3) ||
+      !integer(state.litter, 0, 3) ||
+      !integer(state.selected, 0, 4) ||
+      !point(s.player) ||
+      !["face", "jy", "vy"].every((k) => Number.isFinite(s.player[k]))
+    )
+      return false;
+    if (
+      !resolution(s.resolution) ||
+      (s.subsidy != null && !Object.hasOwn(B, s.subsidy))
+    )
+      return false;
+    if (s.homeId != null && !["home", "homeM", "homeS"].includes(s.homeId))
+      return false;
+    if (
+      ["collected", "sabhaDone", "dayThiefDone"].some(
+        (k) => s[k] !== undefined && typeof s[k] !== "boolean",
+      )
+    )
+      return false;
+    if (
+      ["mandateLost", "finishedAtDusk"].some(
+        (k) => s[k] !== undefined && !integer(s[k], 0, 1e9),
+      )
+    )
+      return false;
+    if (!validSummary(s.lastDawn)) return false;
+    if (state.daily != null) {
+      const d = state.daily;
+      if (
+        !point(d) ||
+        !integer(d.day, 1, 1e9) ||
+        !["water", "feed", "truck"].includes(d.id) ||
+        !knownName(d.who) ||
+        typeof d.done !== "boolean"
+      )
+        return false;
+    }
+    if (
+      state.told != null &&
+      (!record(state.told) ||
+        Object.entries(state.told).some(
+          ([n, count]) => !knownName(n) || !integer(count, 0, 1e9),
+        ))
+    )
+      return false;
+    if (
       !Array.isArray(state.done) ||
+      new Set(state.done).size !== state.done.length ||
       state.done.some(
         (id) => !["water", "feed", "garden", "truck", "litter"].includes(id),
       )
@@ -116,7 +294,8 @@
         ].includes(v.stage) ||
         ![null, "short", "safe"].includes(v.route) ||
         ![null, "lane", "water"].includes(v.project) ||
-        (v.project && !Number.isFinite(v.day))
+        (v.project && !integer(v.day, 1, 1e9)) ||
+        (v.spilled !== undefined && typeof v.spilled !== "boolean")
       )
         return false;
     }
@@ -167,6 +346,7 @@
     localStorage.removeItem(backupKey);
   }
   window.VillageStore = {
+    fields,
     read,
     write,
     validate,

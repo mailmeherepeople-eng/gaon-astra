@@ -1,0 +1,16 @@
+{
+  "planner320": {
+    "columns": "20px 240px",
+    "sideWidth": 20,
+    "overflow": false
+  },
+  "mandateBypass": {
+    "enabled": true,
+    "coins": 60,
+    "project": "lane"
+  },
+  "saveGaps": {
+    "hasDawnSummary": false,
+    "hasCompletedConstructionCount": false
+  }
+}

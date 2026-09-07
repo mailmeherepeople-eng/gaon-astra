@@ -32,6 +32,7 @@
         typeof window.updateSpeech !== "function" ||
         !window.VillageLife ||
         !window.VillageStory ||
+        !window.VillageSabha ||
         !window.GraphicsQuality
       ) {
         report(new Error("A game script did not load"));

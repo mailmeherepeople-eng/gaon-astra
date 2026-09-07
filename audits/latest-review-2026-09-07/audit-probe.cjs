@@ -1,0 +1,11 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE);
+(async()=>{const b=await chromium.launch({channel:'msedge',headless:true});const p=await b.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});let errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto('http://127.0.0.1:8774/');await p.locator('#beginVillage').click();
+const out={};
+await p.evaluate(()=>{S.rank=1;openPlan()});await p.waitForTimeout(300);
+out.planner=await p.evaluate(()=>{const q=s=>{const e=document.querySelector(s),r=e.getBoundingClientRect();return {x:r.x,width:r.width,right:r.right,scroll:e.scrollWidth,client:e.clientWidth}};return {columns:getComputedStyle(document.querySelector('.plan')).gridTemplateColumns,card:q('.plan-card'),map:q('.map'),side:q('.side'),canvas:q('#mapc')}});await p.screenshot({path:'qa/audit-planner-390.png'});
+await p.evaluate(()=>closeScreen());
+out.clock=await p.evaluate(()=>{S.paused=true;S.phase='day';S.t=470;VillageLife.state.story={stage:'route',route:'safe',project:null,day:null};const t=VillageStory.target();S.player.x=t.x;S.player.y=t.y;VillageLife.interact(S.player,true);return {before:470,after:S.t,stage:VillageLife.state.story.stage}});
+out.nightTarget=await p.evaluate(()=>{VillageLife.state.story.stage='deliver';S.phase='night';S.sabhaDone=false;return VillageLife.target()});
+out.dailyOverride=await p.evaluate(()=>{VillageLife.state.story.stage='complete';VillageLife.state.done=['water','litter','feed','truck','garden'];S.day=2;dawn();closeScreen();VillageLife.state.carry='water';const previous={...VillageLife.state.daily};S.day=3;dawn();closeScreen();S.collected=true;return {previous,current:VillageLife.state.daily,carry:VillageLife.carry,target:VillageLife.target()}});
+out.saveValidation=await p.evaluate(()=>{VillageLife.save();const v=JSON.parse(JSON.stringify(VillageStore.exportValue()));v.sim.rank=1.5;const rankAccepted=VillageStore.validate(v);v.sim.rank=1;v.state.daily={id:'water',who:'<b>UNTRUSTED</b>',done:false,day:S.day,x:0,y:0};return {fractionalRank:rankAccepted,dailyMarkup:VillageStore.validate(v)}});
+out.errors=errors;console.log(JSON.stringify(out,null,2));await b.close()})().catch(e=>{console.error(e);process.exitCode=1});

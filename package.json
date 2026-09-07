@@ -9,8 +9,8 @@
     "test:speech": "node tests/speech.cjs",
     "test:performance": "node tests/performance.cjs",
     "build": "node scripts/build.cjs",
-    "test:all": "npm run build && npm test && npm run test:mobile && npm run test:speech && npm run test:performance && node tests/repairs.cjs && node tests/release.cjs",
-    "format": "prettier --write boot.js game.js index.html astra.css astra.js world-art.js village-life.js mobile-ui.js speech-ui.js persistence.js quality.js village-story.js audio.js lessons.js scripts/*.cjs tests/*.cjs",
+    "test:all": "npm run build && npm test && npm run test:mobile && npm run test:speech && npm run test:performance && node tests/repairs.cjs && node tests/gameplay.cjs && node tests/audit-fixes.cjs && node tests/release.cjs",
+    "format": "prettier --write boot.js game.js index.html astra.css astra.js world-art.js village-life.js mobile-ui.js speech-ui.js sabha-ui.js persistence.js quality.js village-story.js audio.js lessons.js scripts/*.cjs tests/*.cjs",
     "benchmark": "node tests/benchmark.cjs"
   },
   "devDependencies": {

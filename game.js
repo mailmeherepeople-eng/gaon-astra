@@ -851,7 +851,44 @@ function closeScreen() {
   last = performance.now();
 }
 // ---------- economy at dawn (coins go to the Panchayat treasury) ----------
+function helpedNeighbours() {
+  const done = window.VillageLife ? VillageLife.state.done : [];
+  return [
+    ["water", "Naresh"],
+    ["litter", "Meera Devi"],
+    ["feed", "Kamla Devi"],
+    ["truck", "Hari Singh"],
+    ["garden", "Prakash"],
+  ]
+    .filter(([id]) => done.includes(id))
+    .map(([, n]) => n);
+}
 function dawn() {
+  const summary = {
+    day: S.day,
+    happyBefore: S.happy,
+    approvalBefore: S.approval,
+    grain: 0,
+    milk: 0,
+    wood: 0,
+    flour: 0,
+    chairs: 0,
+    eat: 0,
+    hungry: false,
+    spoiled: 0,
+    sales: [],
+    income: 0,
+    jobs: 0,
+    workers: 0,
+    happyReasons: [],
+    approvalReasons: [],
+    notes: [],
+    resolution: S.resolution,
+    finished: S.finishedAtDusk || 0,
+    age: null,
+  };
+  S.resolution = null;
+  S.finishedAtDusk = 0;
   S.problems = [];
   S.collected = false;
   S.asleep = false;
@@ -883,6 +920,9 @@ function dawn() {
   S.grain += grain;
   S.milk += milk;
   S.wood += wood;
+  summary.grain = grain;
+  summary.milk = milk;
+  summary.wood = wood;
   let flour = 0,
     chairs = 0;
   S.buildings.forEach((b) => {
@@ -900,15 +940,20 @@ function dawn() {
   });
   S.flour += flour;
   S.chairs += chairs;
+  summary.flour = flour;
+  summary.chairs = chairs;
   if (chairs && !S.warned.includes("value")) {
     S.warned.push("value");
     log(NOTES.value);
   }
   const eat = Math.ceil(S.pop / 4);
+  summary.eat = eat;
   if (S.grain >= eat) {
     S.grain -= eat;
   } else {
     S.happy -= 6;
+    summary.hungry = true;
+    summary.happyReasons.push("−6 people went hungry");
     report.push("Not enough grain: people went hungry");
     S.grain = 0;
   }
@@ -918,17 +963,23 @@ function dawn() {
   const price = { grain: 4, flour: 8, wood: 4, chairs: 12, milk: 4 };
   const sell = (k, amt) => {
     const full = amt * price[k];
-    if (market) {
-      income += full;
-    } else {
-      income += Math.floor(full / 2);
-    }
+    const got = market ? full : Math.floor(full / 2);
+    income += got;
+    summary.sales.push({ k, amt, got, half: !market });
   };
   if (S.milk) {
     if (market || S.has("coop") || road) {
-      if (S.has("coop")) income += S.milk * price.milk;
-      else sell("milk", S.milk);
+      if (S.has("coop")) {
+        income += S.milk * price.milk;
+        summary.sales.push({
+          k: "milk",
+          amt: S.milk,
+          got: S.milk * price.milk,
+          coop: true,
+        });
+      } else sell("milk", S.milk);
     } else {
+      summary.spoiled = S.milk;
       log(NOTES.spoil);
     }
     S.milk = 0;
@@ -957,24 +1008,37 @@ function dawn() {
   if (S.has("tax")) {
     income += S.pop;
     S.happy -= 1;
+    summary.notes.push(`+${S.pop} coins of property tax`);
+    summary.happyReasons.push("−1 grumbling about tax");
   }
   if (S.has("wage")) {
     income += Math.floor(jobs / 2);
     S.grain = Math.max(0, S.grain - 1);
+    summary.notes.push(
+      `+${Math.floor(jobs / 2)} coins saved by paying part in kind`,
+    );
   }
   income += 8;
+  summary.notes.push("+8 coins of village dues");
   S.treasury += income;
+  summary.income = income;
+  summary.jobs = jobs;
+  summary.workers = workers;
   let h = 0;
-  if (S.count("school")) h += 2;
-  if (S.count("clinic")) h += 1;
-  if (S.count("well")) h += 1;
+  const mood = (n, why) => {
+    h += n;
+    summary.happyReasons.push(`${n > 0 ? "+" : "−"}${Math.abs(n)} ${why}`);
+  };
+  if (S.count("school")) mood(2, "children in school");
+  if (S.count("clinic")) mood(1, "the health sub-centre");
+  if (S.count("well")) mood(1, "clean water from the well");
   if (S.has("langar")) {
-    h += 2;
+    mood(2, "the community kitchen");
     if (S.day % 2 === 0) log(NOTES.seva);
   }
-  if (S.has("women")) h += 1;
-  if (S.has("watch")) h -= 1;
-  if (workers - jobs > 8) h -= 1;
+  if (S.has("women")) mood(2, "meetings everyone can attend");
+  if (S.has("watch")) mood(-1, "tired night watchers");
+  if (workers - jobs > 8) mood(-1, "people without work");
   S.happy = Math.max(0, Math.min(100, S.happy + h));
   if (S.happy >= 40) {
     const growth =
@@ -982,17 +1046,32 @@ function dawn() {
       (S.has("midday") && S.count("school") ? 1 : 0) +
       (S.happy >= 70 ? 1 : 0);
     const cap = 8 + S.count("house") * 8 + (S.age >= 2 ? 10 : 0);
+    const before = S.pop;
     S.pop = Math.min(cap, S.pop + growth);
+    if (S.pop > before)
+      summary.notes.push(`+${S.pop - before} people moved in`);
   }
   spawnVillagers();
-  S.approval = Math.round(
-    S.happy * 0.6 + Math.min(40, (S.buildings.length - START_BUILT) * 4),
+  // Approval moves gradually and remembers the neighbours you helped.
+  const favours = helpedNeighbours().length;
+  const works = Math.min(40, (S.buildings.length - START_BUILT) * 4);
+  const trust = Math.min(15, favours * 3);
+  const target = Math.round(S.happy * 0.6 + works + trust);
+  S.approval = Math.max(
+    0,
+    Math.min(100, Math.round((S.approval + target) / 2)),
+  );
+  summary.approvalReasons.push(
+    `happiness ${S.happy} counts for ${Math.round(S.happy * 0.6)}`,
+    `${S.buildings.length - START_BUILT} public works add ${works}`,
+    `${favours} neighbours helped add ${trust}`,
   );
   S.petitions.forEach((p) => {
     p.days--;
     if (p.days <= 0) {
       const plot = PLOTS.find((x) => x.id === p.id);
       S.buildings.push({ ...plot, hp: 1, under: true, start: S.day });
+      summary.notes.push(`${B[p.id].n} sanctioned by the ${B[p.id].petition}`);
       log(
         `<b>${B[p.id].n} sanctioned</b> by the ${B[p.id].petition}. Work starts today.`,
       );
@@ -1006,37 +1085,110 @@ function dawn() {
     S.buildings.forEach((b) => {
       b.hp = 1;
     });
-    S.happy += Math.min(3, S.reported.length);
+    const gain = Math.min(3, S.reported.length);
+    S.happy += gain;
+    summary.happyReasons.push(`+${gain} problems you reported were fixed`);
     log(
       `<b>Because you reported ${S.reported.length} problem${S.reported.length > 1 ? "s" : ""} last night,</b> the Panchayat had them seen to by dawn.`,
     );
     S.reported = [];
   }
   if (S.subsidy) {
+    const plot = PLOTS.find((p) => p.id === S.subsidy);
+    summary.notes.push(
+      `The Sabha pays half of the ${B[S.subsidy].n.toLowerCase()} today`,
+    );
     log(
       `<b>Resolution in force:</b> the treasury pays half of the ${B[S.subsidy].n.toLowerCase()} today.`,
     );
+    // Neighbours gather where last night's resolution will be built.
+    if (plot)
+      S.villagers.slice(0, 3).forEach((v) => {
+        v.tx = plot.x + rnd(-30, 30);
+        v.ty = plot.y + 45;
+        v.wait = 40;
+      });
   }
-  checkAge();
+  summary.age = checkAge();
+  summary.happyAfter = S.happy;
+  summary.approvalAfter = S.approval;
+  S.lastDawn = summary;
   log(
     `<b>Dawn, day ${S.day}.</b> ${income} coins from ${jobs} workers went to the Panchayat treasury${report.length ? ". " + report.join(". ") : ""}.`,
   );
+  if (S.rank >= 1 && S.day > 1) dawnSummary(summary);
 }
 function checkAge() {
   const nx = AGES[S.age + 1];
-  if (!nx) return;
+  if (!nx) return null;
   if (
     S.pop >= nx.need.pop &&
     (nx.need.b || []).every((id) => S.count(id) > 0)
   ) {
     S.age++;
     log(S.age === 1 ? NOTES.age1 : NOTES.age2);
-    screen(
-      `<h2>${AGES[S.age].n}</h2><p>${AGES[S.age].unlock}</p><button id="ok">Continue</button>`,
-    );
-    document.getElementById("ok").onclick = closeScreen;
+    if (S.rank < 1 || S.day <= 1) {
+      screen(
+        `<h2>${AGES[S.age].n}</h2><p>${AGES[S.age].unlock}</p><button id="ok">Continue</button>`,
+      );
+      document.getElementById("ok").onclick = closeScreen;
+    }
+    return AGES[S.age];
   }
+  return null;
 }
+function resolutionName(id) {
+  const names = {
+    watch: "a night watch on the fields",
+    drain: "a drain dug from the lower lane",
+    cleanup: "a clean-up drive at first light",
+    doctor: "the doctor sent for from the block",
+    patwari: "the Patwari called with the old map",
+    nothing: "no new resolution",
+  };
+  if (id.startsWith("fund:"))
+    return `treasury spent on the ${B[id.slice(5)].n.toLowerCase()}`;
+  return names[id] || id;
+}
+// The morning accounts: where the coins came from and why the village feels as it does.
+function dawnSummary(s) {
+  const row = (label, value) => `<span>${label}</span><span>${value}</span>`;
+  const ledger = [
+    s.grain ? row("Harvest from the fields", `+${s.grain} grain`) : "",
+    s.milk ? row("Milk from the dairy", `+${s.milk} milk`) : "",
+    s.wood ? row("Timber from the wood lot", `+${s.wood} wood`) : "",
+    s.flour ? row("Grain milled into flour", `${s.flour} flour`) : "",
+    s.chairs ? row("Wood made into chairs", `${s.chairs} chairs`) : "",
+    row(
+      "Eaten at breakfast",
+      `−${s.eat} grain${s.hungry ? " · not enough!" : ""}`,
+    ),
+    s.spoiled ? row("Milk spoiled on the way", `−${s.spoiled} milk`) : "",
+    ...s.sales.map((x) =>
+      row(
+        `Sold ${x.amt} ${x.k}${x.coop ? " through the cooperative" : x.half ? " to the middleman at half price" : " at the market"}`,
+        `+${x.got} coins`,
+      ),
+    ),
+    ...s.notes.map((n) => row(n, "")),
+    row(
+      `<b>Into the treasury</b> from ${s.jobs} of ${s.workers} workers`,
+      `<b>+${s.income} coins</b>`,
+    ),
+  ].join("");
+  screen(
+    `<span class="eyebrow">DAWN · DAY ${s.day}</span><h2>The village accounts</h2><div class="stats ledger">${ledger}</div><p><b>Happiness ${s.happyBefore} → ${s.happyAfter}</b> <span class="tiny">${s.happyReasons.length ? s.happyReasons.join(" · ") : "nothing changed overnight"}</span></p><p><b>Approval ${s.approvalBefore}% → ${s.approvalAfter}%</b> <span class="tiny">${s.approvalReasons.join(" · ")}. Re-election needs 55%.</span></p>${s.resolution ? `<p><b>Last night's resolution:</b> ${resolutionName(s.resolution)}.</p>` : ""}${s.finished ? `<p><b>${s.finished} construction${s.finished > 1 ? "s" : ""} finished</b> as the light went.</p>` : ""}${s.age ? `<div class="village-example"><b>${s.age.n}.</b> ${s.age.unlock}</div>` : ""}<p class="source">Primary produce, secondary processing, tertiary sale: chapters 13 and 14 in one morning.</p><button id="dawnOk">Start the day</button>`,
+    true,
+  );
+  document.getElementById("dawnOk").onclick = closeScreen;
+}
+function moodLine() {
+  const d = S.lastDawn;
+  if (!d)
+    return '<p class="tiny">Happiness rises with a school, clinic, well and community kitchen, and falls with hunger, sickness and floods. Approval follows happiness, finished public works and neighbours helped.</p>';
+  return `<p class="tiny">Happiness ${d.happyBefore} → ${d.happyAfter}: ${d.happyReasons.join(", ") || "no change"}. Approval ${d.approvalBefore}% → ${d.approvalAfter}%: ${d.approvalReasons.join(", ")}.</p>`;
+}
+window.moodLine = moodLine;
 
 // ---------- dusk: construction completes ----------
 function dusk() {
@@ -1047,6 +1199,7 @@ function dusk() {
       n++;
     }
   });
+  S.finishedAtDusk = n;
   if (n)
     log(
       `<b>${n} construction${n > 1 ? "s" : ""} finished</b> as the light went.`,
@@ -1150,62 +1303,71 @@ function proposals() {
   return P.slice(0, 4);
 }
 function nightSabha() {
+  if (VillageSabha.resume()) return;
+  const panel = VillageSabha.element;
   const P = proposals();
   let voted = null;
-  const filler = [
-    "The wheat is thin this year.",
-    "Nights are getting cold.",
-    "My cousin in the city says they have a Nagar Palika.",
-    "I want the meeting to end so I can sleep.",
-    "The goats got into the school yard again.",
-    "Someone should fix the lane by the well.",
-  ].sort(() => Math.random() - 0.5);
-  const talk = VILLAGERS.slice(0, S.pop > 10 ? 5 : 4)
-    .map((v) => {
-      const pr = P.find((p) => p.by === v.n);
-      return `<li class="talk"><b>${v.n}</b> <span class="tiny">(${v.job})</span><br>${pr ? pr.why : filler.pop()}</li>`;
-    })
-    .join("");
+  // People with a proposal speak first; the rest talk about what the village is living through.
+  const speakers = [
+    ...new Set([...P.map((p) => p.by), ...VILLAGERS.map((v) => v.n)]),
+  ]
+    .map(
+      (n) =>
+        NAMES.find((v) => v.n === n) || {
+          n,
+          job: n === NPC_SARPANCH ? "Sarpanch" : "villager",
+        },
+    )
+    .slice(0, S.pop > 10 ? 5 : 4);
+  const dialogue = speakers.map((v, i) => {
+    const pr = P.find((p) => p.by === v.n);
+    return { ...v, line: pr ? pr.why : talkLine({ ...v, i }) };
+  });
+  VillageSabha.start(dialogue);
   const votesHtml = () =>
     P.map(
       (p, i) =>
         `<button class="pol vote${voted === i ? " on" : ""}" data-i="${i}"><h3>${p.n}</h3><p>${p.why}</p><span class="src">raised by ${p.by}</span></button>`,
     ).join("");
-  screen(
+  VillageSabha.present(
     `<h2>Night Sabha, day ${S.day}</h2><p class="sub">Lamps lit. ${S.rank >= 2 ? "You chair the meeting." : NPC_SARPANCH + " chairs; you have " + "one vote, like every adult" + "."}</p>
-  <p><b>The village speaks.</b></p><ul class="talkers">${talk}</ul>
-  <p><b>Proposals.</b> ${S.rank >= 2 ? "Hear the vote, then decide." : "Cast your vote."}</p><div class="policies" id="props">${votesHtml()}</div><button id="count" class="hidden">Count the votes</button>`,
+  <p><b>Proposals.</b> ${S.rank >= 2 ? "Hear the vote, then decide." : "Cast your vote."}</p><div class="policies" id="sabhaProps">${votesHtml()}</div><button id="sabhaCount" class="hidden">Count the votes</button>`,
     true,
   );
-  ov.querySelectorAll(".vote").forEach(
+  panel.querySelectorAll(".vote").forEach(
     (b) =>
       (b.onclick = () => {
         voted = +b.dataset.i;
-        ov.querySelectorAll(".vote").forEach((x) =>
-          x.classList.toggle("on", +x.dataset.i === voted),
-        );
-        document.getElementById("count").classList.remove("hidden");
+        panel
+          .querySelectorAll(".vote")
+          .forEach((x) => x.classList.toggle("on", +x.dataset.i === voted));
+        panel.querySelector("#sabhaCount").classList.remove("hidden");
       }),
   );
-  document.getElementById("count").onclick = () => {
-    const tally = P.map((p) => p.base + Math.floor(Math.random() * 4));
+  panel.querySelector("#sabhaCount").onclick = () => {
+    const tally = P.map((p) => p.base + Math.floor(Math.random() * 2));
     tally[voted] += 1;
+    // Neighbours you have helped stand with your proposal.
+    const helpedNames = helpedNeighbours();
+    const helped = Math.min(3, helpedNames.length);
+    tally[voted] += helped;
     const maj = tally.indexOf(Math.max(...tally));
-    let html = `<h2>The count</h2><div class="stats">${P.map((p, i) => `<span>${p.n}${i === voted ? " (your vote)" : ""}</span><span>${tally[i]}</span>`).join("")}</div><p><b>Majority:</b> ${P[maj].n}.</p>`;
+    let html = `<h2>The count</h2><div class="stats">${P.map((p, i) => `<span>${p.n}${i === voted ? " (your vote)" : ""}</span><span>${tally[i]}</span>`).join("")}</div><p><b>Neighbours you helped stood with you:</b> ${helped ? helpedNames.slice(0, 3).join(", ") + " (+" + helped + ")" : "nobody yet. Favours earn support."}</p><p><b>Majority:</b> ${P[maj].n}.</p>`;
     if (S.rank >= 2) {
       html += `<p>This is a simplified story decision, not a statement of a Sarpanch’s legal powers. Consider the discussion and explain the choice.</p><div class="policies">${P.map((p, i) => `<button class="pol dec" data-i="${i}"><h3>${p.n}</h3><p>${i === maj ? "Follow the majority." : "Overrule the majority. Approval falls a little, unless it turns out right."}</p></button>`).join("")}</div>`;
-      screen(html, true);
-      ov.querySelectorAll(".dec").forEach(
-        (b) => (b.onclick = () => decide(P, +b.dataset.i, maj, true)),
-      );
+      VillageSabha.present(html);
+      panel
+        .querySelectorAll(".dec")
+        .forEach((b) => (b.onclick = () => decide(P, +b.dataset.i, maj, true)));
     } else {
       const follow = Math.random() < 0.7;
       const pick = follow
         ? maj
         : P.map((p, i) => i).sort((a, b) => P[b].lead - P[a].lead)[0];
-      html += `<p><b>${NPC_SARPANCH} decides:</b> ${P[pick].n}. ${pick === maj ? "The majority carried it." : "The Sarpanch had other ideas. In this simplified game the chair can choose another proposal; real Panchayats must follow applicable rules and remain accountable to the Gram Sabha."}</p><button id="ok">Leave the meeting</button>`;
-      screen(html, true);
-      document.getElementById("ok").onclick = () => decide(P, pick, maj, false);
+      html += `<p><b>${NPC_SARPANCH} decides:</b> ${P[pick].n}. ${pick === maj ? "The majority carried it." : "The Sarpanch had other ideas. In this simplified game the chair can choose another proposal; real Panchayats must follow applicable rules and remain accountable to the Gram Sabha."}</p><button id="sabhaFinish">Leave the meeting</button>`;
+      VillageSabha.present(html);
+      panel.querySelector("#sabhaFinish").onclick = () =>
+        decide(P, pick, maj, false);
     }
   };
 }
@@ -1240,6 +1402,7 @@ function applyResolution(id) {
   }
 }
 function decide(P, pick, maj, mine) {
+  VillageSabha.close();
   const p = P[pick];
   S.resolution = p.id;
   applyResolution(p.id);
@@ -1316,16 +1479,34 @@ function election(after) {
   } else if (won) {
     html += `<p>Re-elected as ${RANKS[S.rank].n}.</p>`;
   } else {
-    html += `<p>Not elected this time. Feed people, build a school, keep the nights quiet, and try again in three days.</p>`;
+    // Losing the vote has a cost: the Sarpanch plans today's works, not you.
+    S.mandateLost = S.day;
+    html += `<p><b>The Sabha did not renew your mandate.</b> Approval ${S.approval}% is below the ${need}% the village expects. You keep your seat for now, but Kamla Devi plans today's works.</p>`;
+    const pick = ["road", "well", "bins", "school", "market"]
+      .map((id) =>
+        PLOTS.find(
+          (p) =>
+            p.id === id && !S.buildings.some((b) => b.x === p.x && b.y === p.y),
+        ),
+      )
+      .filter(Boolean)
+      .find((p) => B[p.id].cost <= S.coins && S.rank >= B[p.id].rank);
+    if (pick) {
+      S.coins -= B[pick.id].cost;
+      S.buildings.push({ ...pick, hp: 1, under: true, start: S.day });
+      html += `<p>She spends ${B[pick.id].cost} coins on the ${B[pick.id].n.toLowerCase()}. Feed people, finish public works and help neighbours to win the next vote in three days.</p>`;
+    } else
+      html += `<p>Feed people, finish public works and help neighbours to win the next vote in three days.</p>`;
   }
   const choices = POLICIES.filter(
     (p) => !S.has(p.id) && (!p.ok || p.ok(S)) && (!p.age || S.age >= p.age),
   )
     .sort(() => Math.random() - 0.5)
     .slice(0, 3);
-  if (S.rank >= 1 && choices.length) {
+  if (won && S.rank >= 1 && choices.length) {
     html += `<p style="margin-top:12px"><b>The Sabha passes one resolution.</b> Pick a policy:</p><div class="policies">${choices.map((p) => `<button class="pol" data-p="${p.id}"><h3>${p.n}</h3><p>${p.p}</p><span class="src">${p.src}</span></button>`).join("")}</div>`;
-  } else html += `<button id="ok">To the land map</button>`;
+  } else
+    html += `<button id="ok">${S.mandateLost === S.day ? "Leave the hall" : "To the land map"}</button>`;
   screen(html);
   ov.querySelectorAll(".pol").forEach(
     (b) =>
@@ -1399,17 +1580,40 @@ const FOOT = {
   embank: 1,
   panchayat: 3.9,
 };
+function publicWorksPermission() {
+  if (S.rank < 1) return "Help five neighbours and stand for election first.";
+  if (S.mandateLost === S.day)
+    return "Kamla Devi plans today's works after the vote. Return tomorrow.";
+  if (S.phase !== "day")
+    return "Public works are planned in daylight. Return tomorrow.";
+  return null;
+}
 function openPlan() {
   if (S.rank < 1) {
     window.VillageLife?.locked();
     return;
   }
+  if (S.mandateLost === S.day) {
+    screen(
+      '<span class="eyebrow">THE SABHA HAS SPOKEN</span><h2>No plan from you today.</h2><p>This morning the Gram Sabha did not renew your mandate, so Kamla Devi planned the works. Approval rises with fed, happy neighbours, finished public works and favours. Try again at the next election.</p><button id="lifeBack">Back to the village</button>',
+    );
+    document.getElementById("lifeBack").onclick = closeScreen;
+    return;
+  }
+  if (publicWorksPermission()) {
+    screen(
+      `<h2>The map will wait</h2><p>${publicWorksPermission()}</p><button id="planBack">Back to the village</button>`,
+    );
+    document.getElementById("planBack").onclick = closeScreen;
+    return;
+  }
   screen(
     `<h2>The land of Lakshmanpur</h2><p class="sub">Tap a plot to plan it. Work starts when you walk out and finishes at dusk. Public works budget: <b id="planCoins">${S.coins}</b></p>
-  <label for="plotSelect">Choose a named plot</label><select id="plotSelect"><option value="">Select a project</option></select><div class="plan"><div class="map"><canvas id="mapc"></canvas></div><div class="side"><h3 id="sideT">Pick a plot</h3><p class="desc" id="sideD">The Bhavan is north of the banyan chowk, your house south of it. Fields lie west, the river and the bridge east. Faint circles are plots your rank cannot open yet.</p><p class="cost" id="sideC"></p><button id="sideB" class="hidden">Plan it</button><ul class="queue" id="queue"></ul><p class="hint">Rank: ${RANKS[S.rank].n}. ${RANKS[S.rank].can}</p></div></div>
-  <button id="leave" class="ghost" style="margin-top:12px">Walk out</button>`,
+  <label for="plotSelect">Choose a named plot</label><select id="plotSelect"><option value="">Select a project</option></select><div class="plan"><div class="map"><canvas id="mapc"></canvas><div id="plotTip" class="plot-tip hidden"></div></div><div class="side"><h3 id="sideT">Pick a plot</h3><p class="desc" id="sideD">The Bhavan is north of the banyan chowk, your house south of it. Fields lie west, the river and the bridge east. Faint circles are plots your rank cannot open yet.</p><p class="cost" id="sideC"></p><button id="sideB" class="hidden">Plan it</button><ul class="queue" id="queue"></ul><p class="hint">Rank: ${RANKS[S.rank].n}. ${RANKS[S.rank].can}</p></div></div>
+  <p class="legend"><span style="--c:#c9b04e">Primary: fields, dairy, wood</span><span style="--c:#8e8e9a">Secondary: mill, workshop</span><span style="--c:#e7a25a">Tertiary: market, road, school</span><span style="--c:#7fa7c9">Civic works</span><span style="--c:#d9b98a">Homes</span><span class="lock">Dotted circles need a higher rank</span></p><button id="leave" class="ghost" style="margin-top:12px">Walk out</button>`,
     true,
   );
+  ov.firstElementChild.classList.add("plan-card");
   planSel = null;
   const plotSelect = document.getElementById("plotSelect");
   function refreshPlots() {
@@ -1459,7 +1663,7 @@ function openPlan() {
   };
   function drawMap() {
     fit();
-    const big = k >= 0.28;
+    const big = k >= 0.22;
     const c = mctx;
     c.fillStyle = "#d3e2bc";
     c.fillRect(0, 0, cw, ch);
@@ -1702,7 +1906,7 @@ function openPlan() {
         .map((p) => `<li><span>${B[p.id].n}</span><b>${p.days}d</b></li>`)
         .join("");
   }
-  mc.addEventListener("pointerdown", (e) => {
+  function plotAt(e) {
     const r = mc.getBoundingClientRect();
     const x = (e.clientX - r.left) / k + MAPB.x0,
       y = (e.clientY - r.top) / k + MAPB.y0;
@@ -1721,12 +1925,37 @@ function openPlan() {
         best = pl;
       }
     });
-    planSel = best;
+    return best;
+  }
+  mc.addEventListener("pointerdown", (e) => {
+    planSel = plotAt(e);
     drawMap();
     side();
   });
+  // Hovering a plot names it and its cost before anything is spent.
+  const tip = document.getElementById("plotTip");
+  mc.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const pl = plotAt(e);
+    if (!pl) {
+      tip.classList.add("hidden");
+      mc.style.cursor = "";
+      return;
+    }
+    const d = B[pl.id];
+    const r = mc.getBoundingClientRect();
+    tip.textContent = `${d.n} · ${d.petition ? "petition the " + d.petition : (S.subsidy === pl.id ? Math.ceil(d.cost / 2) : d.cost) + " coins"}${S.rank < d.rank ? " · needs " + RANKS[d.rank].n : ""}`;
+    tip.style.left = Math.min(r.width - 220, e.clientX - r.left + 14) + "px";
+    tip.style.top = e.clientY - r.top + 14 + "px";
+    tip.classList.remove("hidden");
+    mc.style.cursor = "pointer";
+  });
+  mc.addEventListener("pointerleave", () => {
+    tip.classList.add("hidden");
+    mc.style.cursor = "";
+  });
   document.getElementById("sideB").onclick = () => {
-    if (!planSel || S.rank < 1) return;
+    if (!planSel || publicWorksPermission()) return;
     const d = B[planSel.id];
     if (S.rank < d.rank) return;
     if (d.petition) {
@@ -1789,6 +2018,16 @@ function nightfall() {
     S.problems.push(p);
     if (warn) log(`<b>The children report:</b> ${p.warn}`);
   };
+  // The first night is gentle: something to find and report, nothing to lose.
+  if (n === 1)
+    add({
+      k: "plastic",
+      x: VC.x + 60,
+      y: 1010,
+      warn: "a torn sack of plastic by the chowk.",
+      t: 0,
+      gentle: true,
+    });
   if (n % 3 === 1 && S.dayThiefDone)
     add({
       k: "thief",
@@ -1939,12 +2178,16 @@ function updateProblems(dt) {
     if (p.k === "plastic") {
       if (!p.said) {
         p.said = true;
-        log(NOTES.plastic);
+        log(
+          p.gentle
+            ? "<b>Plastic by the chowk.</b> Goats tore a sack open. Walk over and report it; the Panchayat clears it at dawn."
+            : NOTES.plastic,
+        );
       }
       if (S.count("bins") && S.has("segregate")) {
         p.done = true;
         S.happy += 1;
-      } else if (p.t > 10) {
+      } else if (p.t > 10 && !p.gentle) {
         S.happy -= 3;
         p.done = true;
       }
@@ -2052,11 +2295,11 @@ function collideVillage(p) {
     }
   }
 }
-function tick(dt) {
-  const speed = S.asleep ? 3 : 1;
-  S.t += dt * speed;
-  const len = S.phase === "day" ? S.dayLen : S.nightLen;
-  if (S.t >= len) {
+function advanceVillageTime(seconds) {
+  // Reuse phase transitions for errands too; preserve any time beyond a boundary.
+  S.t += Math.max(0, seconds);
+  while (S.t >= (S.phase === "day" ? S.dayLen : S.nightLen)) {
+    const remainder = S.t - (S.phase === "day" ? S.dayLen : S.nightLen);
     S.t = 0;
     if (S.phase === "day") {
       S.phase = "night";
@@ -2071,7 +2314,12 @@ function tick(dt) {
       S.day++;
       dawn();
     }
+    S.t = remainder;
   }
+}
+function tick(dt) {
+  const speed = S.asleep ? 3 : 1;
+  advanceVillageTime(dt * speed);
   if (S.phase === "night" && !S.asleep && S.sabhaDone) {
     S.awake -= dt;
     if (S.awake <= 0 && S.rank >= 1 && S.rank < 2) {
@@ -2304,6 +2552,7 @@ function startTalk(v) {
 function sleep(forced) {
   if (S.scene === "interior") leaveRoom(true);
   S.asleep = true;
+  camInit = false;
   S.talking = null;
   closePrompt();
   document.getElementById("sleep").classList.remove("hidden");
@@ -2334,7 +2583,7 @@ renderer.setPixelRatio(
   Math.min(mobileGraphics ? 1.25 : 2, devicePixelRatio || 1),
 );
 renderer.shadowMap.enabled = !mobileGraphics;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -3771,6 +4020,8 @@ function dayState(u) {
 let hudHtml = "",
   camInit = false,
   lastNow = performance.now();
+const hudPrev = { happy: null, approval: null };
+let hudDelta = { happy: 0, approval: 0, until: 0 };
 function sync() {
   frameNo++;
   const now = performance.now(),
@@ -4083,7 +4334,7 @@ function sync() {
   let tgt, pos;
   if (S.asleep) {
     tgt = new THREE.Vector3(tx, 1.5, tz);
-    pos = orb(tx, 1.5, tz, Math.max(cam.dist, 26), Math.max(cam.pitch, 0.8));
+    pos = orb(tx, 1.5, tz, Math.max(cam.dist, 30), Math.max(cam.pitch, 1.15));
   } else if (S.scene === "interior") {
     const q = S.inside;
     tgt = new THREE.Vector3(q.x, 1.3, q.z);
@@ -4196,8 +4447,25 @@ function sync() {
   bhavanLamp.intensity = nightAmt * (S.sabhaDone ? 5 : 12);
   M.window.emissiveIntensity = nightAmt * 0.9;
   M.lamp.color.setHex(nightAmt > 0.3 ? 0xffd27a : 0xcfc4a0);
-  // hud
-  const html = `<span class="pill rank"><b>${RANKS[S.rank].n}</b><span class="age">${AGES[S.age].n}</span></span><span class="pill"><span class="lbl">works budget</span><b>${S.coins}</b>${S.treasury ? `<span class="plus">+${S.treasury} at Panchayat</span>` : ""}</span><span class="pill"><span class="lbl">grain</span><b>${S.grain}</b><span class="lbl">people</span><b>${S.pop}</b><span class="lbl">happy</span><b>${S.happy}</b></span><span class="pill"><span class="lbl">approval</span><b>${S.approval}%</b></span>${S.problems.length ? `<span class="pill warn">${S.problems.length} problem${S.problems.length > 1 ? "s" : ""}</span>` : ""}${S.phase === "night" && S.sabhaDone && !S.asleep && S.rank < 2 ? `<span class="pill"><span class="lbl">lamp</span><b>${Math.max(0, Math.ceil(S.awake))}s</b></span>` : ""}`;
+  // hud: numbers explain themselves on hover and show what just changed
+  if (
+    hudPrev.happy !== null &&
+    (S.happy !== hudPrev.happy || S.approval !== hudPrev.approval)
+  ) {
+    const keep = now < hudDelta.until;
+    hudDelta = {
+      happy: S.happy - hudPrev.happy || (keep ? hudDelta.happy : 0),
+      approval: S.approval - hudPrev.approval || (keep ? hudDelta.approval : 0),
+      until: now + 5000,
+    };
+  }
+  hudPrev.happy = S.happy;
+  hudPrev.approval = S.approval;
+  const badge = (v) =>
+    now < hudDelta.until && v
+      ? `<span class="delta ${v > 0 ? "up" : "down"}">${v > 0 ? "+" : ""}${v}</span>`
+      : "";
+  const html = `<span class="pill rank" title="Your rank in Panchayati Raj and the settlement's stage"><b>${RANKS[S.rank].n}</b><span class="age">${AGES[S.age].n}</span></span><span class="pill" title="Public money you can spend on plots at the map table. Income arrives at the Panchayat each dawn"><span class="lbl">works budget</span><b>${S.coins}</b>${S.treasury ? `<span class="plus">+${S.treasury} at Panchayat</span>` : ""}</span><span class="pill" title="Grain in the store: a quarter of the people eat one sack each dawn. Happiness rises with a school, clinic, well and kitchen; it falls with hunger, sickness and floods"><span class="lbl">grain</span><b>${S.grain}</b><span class="lbl">people</span><b>${S.pop}</b><span class="lbl">happy</span><b>${S.happy}</b>${badge(hudDelta.happy)}</span><span class="pill" title="What the Gram Sabha thinks of you: happiness, finished public works and neighbours helped. Re-election needs 55%"><span class="lbl">approval</span><b>${S.approval}%</b>${badge(hudDelta.approval)}</span>${S.problems.length ? `<span class="pill warn" title="Trouble in the village. Walk close to report it; the Panchayat fixes reported problems at dawn">${S.problems.length} problem${S.problems.length > 1 ? "s" : ""}</span>` : ""}${S.phase === "night" && S.sabhaDone && !S.asleep && S.rank < 2 ? `<span class="pill" title="Lantern light left before villagers must be indoors"><span class="lbl">lamp</span><b>${Math.max(0, Math.ceil(S.awake))}s</b></span>` : ""}`;
   if ((!window.VillageLife || S.rank > 0) && html !== hudHtml) {
     hudHtml = html;
     document.getElementById("hud").innerHTML = html;
@@ -4506,10 +4774,19 @@ function buildRoom(b) {
       x: 0,
       z: -2,
       r: 2.4,
-      html: () =>
-        S.phase === "day"
-          ? `<h4>The land map</h4><p>Lakshmanpur on paper. Plan today's work.</p><button id="hsb">Open the map</button>`
-          : `<h4>The land map</h4><p>Too dark to plan. Wait for morning.</p>`,
+      html: () => {
+        if (S.rank < 1) {
+          const nominated = (window.VillageLife?.state.done.length || 0) >= 5;
+          return nominated
+            ? `<h4>The land map</h4><p>Your neighbours nominated you. The ward votes here.</p><button id="hsb">Stand for election</button>`
+            : `<h4>The land map</h4><p>Panchayat members plan public works here. Help five neighbours to be nominated.</p>`;
+        }
+        if (S.phase !== "day")
+          return `<h4>The land map</h4><p>Too dark to plan. Wait for morning.</p>`;
+        if (S.mandateLost === S.day)
+          return `<h4>The land map</h4><p>Kamla Devi planned today's works after the vote.</p>`;
+        return `<h4>The land map</h4><p>Lakshmanpur on paper. ${S.collected ? "Plan today's work." : "The treasury is counted here, then you plan."}</p><button id="hsb">${S.collected ? "Open the map" : "Collect the budget and plan"}</button>`;
+      },
       act: () => {
         if (S.phase === "day") visitPanchayat();
       },
@@ -4543,6 +4820,7 @@ function buildRoom(b) {
       hotspots: hot,
       building: b,
       name: "Panchayat Bhavan",
+      sabhaSeats: seated.map((v) => v.position),
     };
     room.update = () => {
       const night = S.phase === "night";
@@ -4759,6 +5037,8 @@ window.VC = VC;
 window.moveHome = moveHome;
 window.pitchMin = pitchMin;
 window.talkLine = talkLine;
+window.helpedNeighbours = helpedNeighbours;
+window.dawnSummary = dawnSummary;
 let last = performance.now();
 let lastPausedDraw = -Infinity;
 function frame(now) {

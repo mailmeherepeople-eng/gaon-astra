@@ -1,0 +1,74 @@
+{
+  "planner": {
+    "columns": "90px 240px",
+    "card": {
+      "x": 8,
+      "width": 374,
+      "right": 382,
+      "scroll": 372,
+      "client": 372
+    },
+    "map": {
+      "x": 125,
+      "width": 240,
+      "right": 365,
+      "scroll": 236,
+      "client": 236
+    },
+    "side": {
+      "x": 25,
+      "width": 90,
+      "right": 115,
+      "scroll": 90,
+      "client": 90
+    },
+    "canvas": {
+      "x": 127,
+      "width": 236,
+      "right": 363,
+      "scroll": 236,
+      "client": 236
+    }
+  },
+  "clock": {
+    "before": 470,
+    "after": 450,
+    "stage": "deliver"
+  },
+  "nightTarget": {
+    "x": 1390,
+    "y": 967,
+    "name": "Deliver Meera’s basket to Hari",
+    "hint": "Hari is at the market truck."
+  },
+  "dailyOverride": {
+    "previous": {
+      "day": 2,
+      "id": "water",
+      "done": false,
+      "who": "Naresh",
+      "x": 1040,
+      "y": 897
+    },
+    "current": {
+      "day": 3,
+      "id": "feed",
+      "done": false,
+      "who": "Kamla Devi",
+      "x": 1390,
+      "y": 967
+    },
+    "carry": "water",
+    "target": {
+      "x": 1250,
+      "y": 724,
+      "name": "Take your seat at the night Sabha",
+      "hint": "The village is waiting inside the Bhavan."
+    }
+  },
+  "saveValidation": {
+    "fractionalRank": true,
+    "dailyMarkup": true
+  },
+  "errors": []
+}

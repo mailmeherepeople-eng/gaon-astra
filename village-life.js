@@ -56,6 +56,12 @@
     },
   ];
   const complete = (id) => state.done.includes(id);
+  // Thanks are spoken where the player stands, not wherever the speaker's actor wandered.
+  const playerAnchor = () => ({
+    x: U(S.player.x),
+    y: groundY(U(S.player.x), U(S.player.y)) + 2.1,
+    z: U(S.player.y),
+  });
   let started = false;
   function save() {
     if (!started || S.over || window.GameRecovery?.failed)
@@ -64,38 +70,7 @@
         message: "Village not saved while this session is inactive.",
       };
     try {
-      const fields = [
-        "day",
-        "t",
-        "phase",
-        "coins",
-        "treasury",
-        "grain",
-        "milk",
-        "wood",
-        "flour",
-        "chairs",
-        "pop",
-        "happy",
-        "approval",
-        "rank",
-        "age",
-        "policies",
-        "petitions",
-        "buildings",
-        "res",
-        "homeId",
-        "collected",
-        "lastElection",
-        "subsidy",
-        "resolution",
-        "problems",
-        "sabhaDone",
-        "awake",
-        "dayThiefDone",
-        "reported",
-        "night",
-      ];
+      const fields = VillageStore.fields;
       const sim = {};
       fields.forEach((k) => (sim[k] = S[k]));
       sim.player = { ...S.player, moving: false, jy: 0, vy: 0 };
@@ -123,16 +98,8 @@
   function restore() {
     if (!saved) return;
     state = saved.state;
-    for (const [field, value] of Object.entries(saved.sim)) {
-      if (
-        Object.hasOwn(S, field) &&
-        typeof S[field] !== "function" &&
-        !["scene", "room", "keys", "paused", "over", "villagers"].includes(
-          field,
-        )
-      )
-        S[field] = value;
-    }
+    for (const field of [...VillageStore.fields, "player"])
+      if (Object.hasOwn(saved.sim, field)) S[field] = saved.sim[field];
     S.villagers = [];
     spawnVillagers();
     S.scene = "village";
@@ -175,7 +142,7 @@
       ) || { n: name };
     const line = message.match(/“([^”]+)”/)?.[1];
     log("<b>Favour completed.</b> " + jobs.find((j) => j.id === id).name + ".");
-    if (line) speak(who, line, null, true);
+    if (line) speak(who, line, playerAnchor(), true);
     Gaon.audio.play("celebrate");
     state.selected = jobs.findIndex((j) => !complete(j.id));
     if (state.selected < 0) state.selected = 0;
@@ -199,6 +166,13 @@
       "Public money and the village plan are responsibilities of the elected Panchayat. Help your neighbours, earn their trust, then stand in the village election. Your own pocket is separate from the public treasury.",
     );
   }
+  const supporters = [
+    ["water", "Naresh", "the water you carried"],
+    ["litter", "Meera Devi", "the lane you cleared"],
+    ["feed", "Kamla Devi", "the cows you fed"],
+    ["truck", "Hari Singh", "the harvest you loaded"],
+    ["garden", "Prakash", "the saplings you watered"],
+  ];
   function election() {
     if (S.rank >= 1) {
       openPlan();
@@ -208,21 +182,24 @@
       locked();
       return;
     }
+    const backing = supporters.filter(([id]) => complete(id));
+    const votes = 2 + backing.length * 2;
+    const rival = 15 - votes;
     screen(
-      `<span class="eyebrow">THE VILLAGE ELECTION</span><h2>Your neighbours know your work.</h2><p>Naresh remembers the water. Meera remembers the clean lane. Kamla and Hari remember the help you gave.</p><p>In this story, the next scheduled election has arrived. The adult voters choose their ward’s Panchayat member by secret ballot. Each voter has one vote.</p><p class="village-example">Helping people earned their trust. It did not automatically give you a seat: the voters decide.</p><button id="voteResult">Count the ballots</button><button class="ghost" id="voteLater">Come back later</button>`,
+      `<span class="eyebrow">THE VILLAGE ELECTION</span><h2>Your neighbours know your work.</h2><p>In this story, the next scheduled election has arrived. The fifteen adult voters of the ward choose their Panchayat member by secret ballot; each voter has one vote. Devi Lal, who has sat on the Panchayat before, also stands.</p><ul class="ballot">${backing.map(([, n, why]) => `<li><b>${n}</b> and one of their household remember ${why}.</li>`).join("")}<li><b>Two neighbours</b> like what they have heard of you.</li><li><b>${rival} voters</b> trust Devi Lal's experience.</li></ul><p class="village-example">Helping people earned their trust. It did not automatically give you a seat: the voters decide, and the count is read out loud.</p><button id="voteResult">Count the ballots</button><button class="ghost" id="voteLater">Come back later</button>`,
       true,
     );
     document.getElementById("voteLater").onclick = closeScreen;
     document.getElementById("voteResult").onclick = () => {
       S.rank = 1;
-      S.approval = 80;
+      S.approval = Math.round((votes / 15) * 100);
       S.dayLen = 480;
       S.nightLen = 150;
       S.t = 0;
       S.phase = "day";
       save();
       screen(
-        `<span class="eyebrow">ELECTED · PANCHAYAT MEMBER</span><h2>Twelve of fifteen votes.</h2><p>The fictional ward has chosen you. You can now use the map table and access the public works budget. Listen to the Gram Sabha and explain how public money is spent.</p><p>You are a Panchayat member. The Sarpanch and the rest of the Panchayat still have their own responsibilities.</p><button id="memberGo">Take up your responsibilities</button>`,
+        `<span class="eyebrow">ELECTED · PANCHAYAT MEMBER</span><h2>${votes} of 15 votes.</h2><div class="stats"><span>You</span><span>${votes}</span><span>Devi Lal</span><span>${rival}</span></div><p>The fictional ward has chosen you. You can now use the map table and the public works budget. Approval starts at ${S.approval}% and moves each dawn with happiness, finished works and favours; the Sabha votes again every third morning and expects 55%.</p><p>You are a Panchayat member. The Sarpanch and the rest of the Panchayat still have their own responsibilities.</p><button id="memberGo">Take up your responsibilities</button>`,
         true,
       );
       document.getElementById("memberGo").onclick = () => {
@@ -239,6 +216,7 @@
   dawn = function () {
     if (S.rank >= 1) {
       baseDawn();
+      assignDaily();
       return;
     }
     S.asleep = false;
@@ -267,6 +245,8 @@
   S.approval = 20;
   S.dayLen = 480;
   S.nightLen = 150;
+  S.mandateLost = 0;
+  S.finishedAtDusk = 0;
   const waypoint = new T.Mesh(
     new T.TorusGeometry(0.48, 0.045, 10, 40),
     A.material(0xe0b75f, { emissive: 0x44321a }),
@@ -443,7 +423,7 @@
     visuals();
     save();
   }
-  function start(label, seconds, fn) {
+  function start(label, seconds, fn, onCancel) {
     if (action) return;
     action = {
       label,
@@ -452,6 +432,7 @@
       x: S.player.x,
       y: S.player.y,
       fn,
+      onCancel,
     };
     closePrompt();
   }
@@ -465,13 +446,27 @@
       );
       return true;
     }
-    if (near(1140, 760))
+    const d = state.daily;
+    const dailyOn = (k) => !!d && !d.done && d.id === k && S.rank >= 1;
+    if (dailyOn("water") && state.carry === "water" && near(d.x, d.y, 28))
+      o = {
+        name: d.who + "’s home",
+        text: d.who + " needs water for the day. Set the bucket by the door.",
+        button: "Deliver the bucket",
+        fn: () =>
+          dailyDone(
+            d.who,
+            "Thank you. A full bucket first thing makes the whole day easier.",
+          ),
+      };
+    if (o) {
+    } else if (near(1140, 760))
       o = {
         name: "The hand pump",
         text: state.carry
           ? "Your hands are full. Deliver what you are carrying."
           : "A few steady strokes will fill your bucket.",
-        button: state.carry ? "Keep carrying" : "Fill bucket",
+        button: state.carry ? null : "Fill bucket",
         fn: () => {
           if (!state.carry)
             start("Filling the bucket", 2.2, () => take("water"));
@@ -514,10 +509,16 @@
         button: "Pick up fodder",
         fn: () => take("fodder"),
       };
-    else if (near(1350, 980) && !state.carry && !complete("truck"))
+    else if (
+      near(1350, 980) &&
+      !state.carry &&
+      (!complete("truck") || dailyOn("truck"))
+    )
       o = {
         name: "Hari’s grain sacks",
-        text: `${state.loads}/3 sacks loaded. Carry one to the back of the truck.`,
+        text: complete("truck")
+          ? "Hari needs one more sack on the truck today."
+          : `${state.loads}/3 sacks loaded. Carry one to the back of the truck.`,
         button: "Lift a sack",
         fn: () => start("Lifting a grain sack", 0.7, () => take("grain")),
       };
@@ -528,9 +529,17 @@
         button: "Load the truck",
         fn: () =>
           start("Loading the harvest", 1, () => {
-            state.loads++;
+            if (complete("truck") && dailyOn("truck")) {
+              dailyDone(
+                "Hari Singh",
+                "One more sack aboard. The market will have enough tomorrow.",
+              );
+              return;
+            }
+            // A repeat sack must never alter the completed tutorial counter.
+            if (!complete("truck")) state.loads = Math.min(3, state.loads + 1);
             state.carry = null;
-            if (state.loads === 3)
+            if (!complete("truck") && state.loads === 3)
               done(
                 "truck",
                 "<b>Hari Singh:</b> “All aboard! Farmers and transport workers both get food to the market.”",
@@ -602,6 +611,11 @@
                   "feed",
                   "<b>Kamla Devi:</b> “She knows you now! Caring for animals is part of our daily work.”",
                 );
+              else if (dailyOn("feed"))
+                dailyDone(
+                  "Kamla Devi",
+                  "She was hungry. Thank you for remembering the cows.",
+                );
               else {
                 state.carry = null;
                 visuals();
@@ -617,23 +631,185 @@
     if (!o) return false;
     showPrompt(
       "life" + o.name + o.button + state.litter + state.loads,
-      `<h4>${o.name}</h4><p>${o.text}</p><button id="hsb">${o.button}</button>`,
+      `<h4>${esc(o.name)}</h4><p>${esc(o.text)}</p>${o.button ? `<button id="hsb">${o.button}</button>` : ""}`,
     );
     const b = document.getElementById("hsb");
     if (b) b.onclick = o.fn;
     if (edge) o.fn();
     return true;
   }
+  // Small daily favours keep neighbours asking once the first five are done.
+  function assignDaily() {
+    if (S.rank < 1 || state.done.length < 5) return;
+    // Keep an unfinished delivery across dawn, including its recipient and reward.
+    if (state.daily && !state.daily.done) return;
+    const kinds = ["water", "feed", "truck"];
+    const id = kinds[(S.day + 1) % kinds.length];
+    const houses = S.buildings.filter(
+      (b) =>
+        b !== HOME &&
+        ["house", "homeM", "homeS"].includes(b.id) &&
+        !b.under &&
+        residentOf(b),
+    );
+    const h = houses.length ? houses[S.day % houses.length] : null;
+    const who =
+      id === "water"
+        ? h
+          ? residentOf(h).n
+          : "Naresh"
+        : id === "feed"
+          ? "Kamla Devi"
+          : "Hari Singh";
+    state.daily = {
+      day: S.day,
+      id,
+      done: false,
+      who,
+      x: id === "water" && h ? h.x : 1390,
+      y: id === "water" && h ? h.y + DOOR_OFF[h.id] + 4 : 967,
+    };
+    log(
+      `<b>${esc(who)} asks a favour.</b> ${id === "water" ? "A bucket of water at the door." : id === "feed" ? "A hand with the cows' fodder." : "One more sack on the truck."} Small favours keep the village's trust.`,
+    );
+  }
+  function dailyDone(name, quote) {
+    state.daily.done = true;
+    state.carry = null;
+    S.approval = Math.min(100, S.approval + 3);
+    S.happy = Math.min(100, S.happy + 1);
+    const who = S.villagers.find((v) => v.n === name) || { n: name };
+    log("<b>Favour done.</b> Your neighbours remember. Approval +3.");
+    speak(who, quote, playerAnchor(), true);
+    Gaon.audio.play("celebrate");
+    visuals();
+    save();
+  }
+  function dailyTarget(d) {
+    if (d.id === "water")
+      return state.carry === "water"
+        ? {
+            x: d.x,
+            y: d.y,
+            name: `Deliver water to ${d.who}`,
+            hint: "Set the bucket by the door.",
+          }
+        : {
+            x: 1140,
+            y: 760,
+            name: `Fill a bucket for ${d.who}`,
+            hint: "The hand pump is by the chowk lane.",
+          };
+    if (d.id === "feed")
+      return state.carry === "fodder"
+        ? {
+            x: cows[0].position.x * 10,
+            y: cows[0].position.z * 10,
+            name: "Feed a cow for Kamla",
+            hint: "Any cow will do.",
+          }
+        : {
+            x: 1230,
+            y: 1030,
+            name: "Collect fodder for Kamla",
+            hint: "The bundle is by the fodder sign.",
+          };
+    return state.carry === "grain"
+      ? {
+          x: 1390,
+          y: 967,
+          name: "Load the sack for Hari",
+          hint: "Set it on the truck bed.",
+        }
+      : {
+          x: 1350,
+          y: 980,
+          name: "Lift a sack for Hari",
+          hint: "The grain stack is by the truck.",
+        };
+  }
+  // The elected day has a shape: budget, plan, watch, Sabha, home.
+  function electedTarget() {
+    const door = { x: PANCH.x, y: PANCH.y + DOOR_OFF.panchayat };
+    const home = { x: HOME.x, y: HOME.y + DOOR_OFF[HOME.id] };
+    if (S.asleep)
+      return {
+        ...home,
+        name: "Sleeping",
+        hint: "The night passes at triple speed.",
+      };
+    if (S.phase === "night") {
+      if (!S.sabhaDone)
+        return {
+          ...door,
+          name: "Take your seat at the night Sabha",
+          hint: "The village is waiting inside the Bhavan.",
+        };
+      const problem = S.problems.find((q) => !q.rep);
+      if (problem && S.awake > 15)
+        return {
+          x: problem.x,
+          y: problem.y,
+          name:
+            "Report the trouble by the " +
+            ({
+              thief: "fields",
+              flood: "river",
+              plastic: "chowk",
+              sick: "houses",
+              dispute: "field edge",
+            }[problem.k] || "lane"),
+          hint: "Walk close with the lantern; the Panchayat fixes what you report at dawn.",
+        };
+      return {
+        ...home,
+        name:
+          S.rank >= 2
+            ? "Walk with the lantern, or sleep at home"
+            : "Home before the lamps go out",
+        hint: "Your bed is inside. Sleeping runs the night at triple speed.",
+      };
+    }
+    if (!S.collected && S.mandateLost !== S.day)
+      return {
+        ...door,
+        name: "Collect the budget at the Panchayat",
+        hint: "The night's income waits in the treasury. The map table counts it.",
+      };
+    const d = state.daily;
+    if (d && !d.done) return dailyTarget(d);
+    const site = S.buildings.find((b) => b.under);
+    if (site)
+      return {
+        x: site.x,
+        y: site.y + 40,
+        name: `Watch the ${B[site.id].n.toLowerCase()} rise`,
+        hint: "Construction finishes at dusk. Talk to neighbours meanwhile.",
+      };
+    if (S.collected && S.coins >= 10 && S.mandateLost !== S.day)
+      return {
+        ...door,
+        name: "Plan a project at the map table",
+        hint: "Public works raise happiness and approval.",
+      };
+    return {
+      ...home,
+      name: "A free afternoon",
+      hint: "Talk to neighbours, or rest at home until dusk.",
+    };
+  }
   function target() {
+    if (S.rank >= 1 && (S.phase === "night" || S.asleep))
+      return electedTarget();
     const storyTarget = window.VillageStory?.target();
     if (storyTarget) return storyTarget;
+    if (S.rank >= 1) return electedTarget();
     if (state.done.length === 5)
       return {
         x: 1250,
         y: 724,
-        name: S.rank
-          ? "Visit the planning table"
-          : "Attend the village election",
+        name: "Attend the village election",
+        hint: "The ward votes at the map table inside the Panchayat Bhavan.",
       };
     const j = jobs[state.selected] || jobs[0];
     const points = {
@@ -681,12 +857,31 @@
       }[id],
     };
   }
+  function storyCard() {
+    const st = window.VillageStory?.status();
+    if (!st) return "";
+    return `<h3 class="jobs-heading">A village story</h3><div class="lesson-grid"><button id="storyButton" data-story><small>${st.label}</small>Meera’s market morning<p>${st.hint}</p></button></div>`;
+  }
+  function dailyCard() {
+    const d = state.daily;
+    if (!d || S.rank < 1) return "";
+    const t = dailyTarget(d);
+    return `<h3 class="jobs-heading">${d.day < S.day && !d.done ? "An unfinished favour" : "Today's favour"}</h3><div class="lesson-grid"><button data-daily><small>${d.done ? "✓ DONE TODAY" : esc(d.who)}</small>${esc(t.name)}<p>${d.done ? "Another neighbour will ask tomorrow." : esc(t.hint)}</p></button></div>`;
+  }
   function openJobs() {
     screen(
-      `<div class="journal-head"><div><span class="eyebrow">YOUR NEIGHBOURS NEED A HAND</span><h2>A good day in the village</h2></div><button id="jobsClose" class="ghost">Back ×</button></div><p>Explore, help and make friends. ${S.rank === 0 ? "Complete five favours to earn a nomination for the next village election." : "Your elected responsibilities are now available at the Bhavan."}</p><div class="lesson-grid">${jobs.map((j, i) => `<button data-job="${i}"><small>${complete(j.id) ? "✓ THANK YOU" : j.by}</small>${j.name}<p>${j.hint}</p></button>`).join("")}</div><p class="source">${state.done.length}/5 favours · Carrying: ${state.carry || "nothing"} · The chapter journal is always optional.</p>`,
+      `<div class="journal-head"><div><span class="eyebrow">YOUR NEIGHBOURS NEED A HAND</span><h2>A good day in the village</h2></div><button id="jobsClose" class="ghost">Back ×</button></div><p>Explore, help and make friends. ${S.rank === 0 ? "Complete five favours to earn a nomination for the next village election." : "Your elected responsibilities are now available at the Bhavan."}</p><div class="lesson-grid">${jobs.map((j, i) => `<button data-job="${i}"><small>${complete(j.id) ? "✓ THANK YOU" : j.by}</small>${j.name}<p>${j.hint}</p></button>`).join("")}</div>${dailyCard()}${storyCard()}<p class="source">${state.done.length}/5 favours · Carrying: ${state.carry || "nothing"} · The chapter journal is always optional.</p>`,
       true,
     );
     document.getElementById("jobsClose").onclick = closeScreen;
+    const story = document.getElementById("storyButton");
+    if (story)
+      story.onclick = () => {
+        closeScreen();
+        window.VillageStory?.open();
+      };
+    const daily = ov.querySelector("[data-daily]");
+    if (daily) daily.onclick = closeScreen;
     ov.querySelectorAll("[data-job]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -702,9 +897,11 @@
     window.VillageStory?.update();
     if (action && dt) {
       if (Math.hypot(S.player.x - action.x, S.player.y - action.y) > 9) {
+        const cancelled = action;
         action = null;
         pumpUntil = 0;
-        log("Paused the job. Come back when you are ready.");
+        if (cancelled.onCancel) cancelled.onCancel();
+        else log("Paused the job. Come back when you are ready.");
       } else {
         if (action.label.includes("bucket")) pumpUntil = astraTime + 0.2;
         action.left -= dt;
@@ -735,7 +932,20 @@
       const t = target(),
         dist = Math.round(Math.hypot(S.player.x - t.x, S.player.y - t.y) / 10),
         relative = Math.atan2(t.x - S.player.x, t.y - S.player.y) - cam.yaw;
-      const missionHtml = `<span class="eyebrow">${S.rank ? "A VILLAGE TO CARE FOR" : `${state.done.length}/5 NEIGHBOUR FAVOURS`}</span><strong>${t.name}</strong><small><span style="display:inline-block;transform:rotate(${Math.round((-relative * 180) / Math.PI)}deg)">↓</span> ${dist} m · Carrying ${state.carry || "nothing"}</small><p>${S.rank ? "Collect the public budget, choose a project, then return at dusk." : matchMedia("(pointer:coarse)").matches ? "Use nearby · Menu → Neighbour jobs" : "E to interact · Neighbour jobs for directions"}</p>`;
+      const touch = matchMedia("(pointer:coarse)").matches;
+      const hint =
+        t.hint ||
+        (S.rank
+          ? "Collect the public budget, choose a project, then return at dusk."
+          : touch
+            ? "Use nearby · Menu → Neighbour jobs"
+            : "E to interact · Neighbour jobs for directions");
+      const eyebrow = S.rank
+        ? S.phase === "night"
+          ? "NIGHT IN LAKSHMANPUR"
+          : "A VILLAGE TO CARE FOR"
+        : `${state.done.length}/5 NEIGHBOUR FAVOURS`;
+      const missionHtml = `<span class="eyebrow">${eyebrow}</span><strong>${esc(t.name)}</strong><small><span style="display:inline-block;transform:rotate(${Math.round((-relative * 180) / Math.PI)}deg)">↓</span> ${dist} m · Carrying ${state.carry || "nothing"}</small><p>${hint}</p>`;
       if (missionHtml !== lastMissionHtml) {
         mission.innerHTML = missionHtml;
         lastMissionHtml = missionHtml;
@@ -908,6 +1118,10 @@
     update,
     save,
     restart,
+    begin: start,
+    get busy() {
+      return !!action;
+    },
     get started() {
       return started;
     },
@@ -930,7 +1144,9 @@
     screen(
       '<span class="eyebrow">TAKE A BREATHER</span><h2>Your village will wait.</h2><p>' +
         esc(result.message) +
-        '</p><button id="resumeVillage">Keep playing</button><button id="jobsPause" class="ghost">Neighbour jobs</button>',
+        "</p>" +
+        moodLine() +
+        '<button id="resumeVillage">Keep playing</button><button id="jobsPause" class="ghost">Neighbour jobs</button>',
       true,
     );
     document.getElementById("resumeVillage").onclick = closeScreen;

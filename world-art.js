@@ -964,6 +964,14 @@
   }
   foliage.count = mobileGraphics ? 700 : 1050;
   foliage.castShadow = true;
+  // Trunk and branches merge into one draw per tree; the neem sits at the origin while batching.
+  {
+    const at = neem.position.clone();
+    neem.position.set(0, 0, 0);
+    batchStatic(neem);
+    neem.position.copy(at);
+  }
+  foliage.raycast = () => {};
   neem.add(foliage);
   shadow(119, 80, 7, 6);
   SOLIDS.push({ x: 1190, z: 800, r: 7 });
@@ -1371,6 +1379,80 @@
       n.scale.setScalar(0.8 + random() * 0.6);
       corner.add(n);
     }
+  }
+  // The banyan at the chowk wears the same bark and leaf language as the neems, with aerial roots.
+  const banyan = scene.children.find(
+    (o) =>
+      Math.abs(o.position.x - U(VC.x)) < 0.01 &&
+      Math.abs(o.position.z - (U(VC.y) - 3)) < 0.01 &&
+      o.children.some((m) => m.geometry?.type === "DodecahedronGeometry"),
+  );
+  if (banyan) {
+    for (const m of banyan.children)
+      if (
+        m.geometry?.type === "DodecahedronGeometry" ||
+        (m.geometry?.type === "CylinderGeometry" &&
+          m.geometry.parameters.radiusTop < 0.2)
+      )
+        m.visible = false;
+    const canopy = new T.Group();
+    canopy.name = "Banyan canopy";
+    rod(canopy, [0, 3.2, 0], [0.2, 5.4, 0.1], 1.3, 0.75, P.bark, 18);
+    const ends = [];
+    for (let i = 0; i < 9; i++) {
+      const a = i * 0.698 + 0.3,
+        r = range(4.2, 6.4),
+        y = range(5.2, 7.8);
+      const end = [Math.cos(a) * r, y, Math.sin(a) * r];
+      rod(canopy, [0.1, range(3.8, 5), 0], end, 0.36, 0.1, P.bark, 10);
+      ends.push(end);
+      if (i % 2 === 0)
+        rod(
+          canopy,
+          [end[0] * 0.8, end[1] - 0.3, end[2] * 0.8],
+          [end[0] * 0.9, 0.05, end[2] * 0.9],
+          0.08,
+          0.13,
+          P.bark,
+          6,
+        );
+    }
+    batchStatic(canopy);
+    // Branches and roots are scenery for the camera, not walls: only the trunk blocks the view.
+    canopy.children.forEach((c) => (c.raycast = () => {}));
+    const leaves = new T.InstancedMesh(
+      new T.PlaneGeometry(1.1, 0.6),
+      leafMat,
+      2600,
+    );
+    let n = 0;
+    for (let i = 0; i < 2600; i++) {
+      const c = ends[i % ends.length];
+      let x, y, z;
+      do {
+        x = range(-1, 1);
+        y = range(-1, 1);
+        z = range(-1, 1);
+      } while (x * x + y * y + z * z > 1);
+      obj.position.set(c[0] + x * 2.6, c[1] + 1.3 + y * 1.5, c[2] + z * 2.6);
+      obj.rotation.set(range(-1.5, 1.5), range(0, 6.28), range(-1.5, 1.5));
+      obj.scale.setScalar(range(0.8, 1.45));
+      obj.updateMatrix();
+      leaves.setMatrixAt(n, obj.matrix);
+      leaves.setColorAt(
+        n++,
+        new T.Color().setHSL(
+          range(0.21, 0.27),
+          range(0.14, 0.3),
+          range(0.48, 0.8),
+        ),
+      );
+    }
+    leaves.count = mobileGraphics ? 1300 : 2600;
+    leaves.castShadow = true;
+    leaves.raycast = () => {};
+    canopy.add(leaves);
+    banyan.add(canopy);
   }
   const gc = groundGeo.attributes.color;
   if (gc)

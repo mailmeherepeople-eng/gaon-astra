@@ -52,7 +52,7 @@ npm run test:all
 npm run benchmark
 ```
 
-The complete check runs smoke, gameplay/save integration, seven phone sizes, three speech layouts, performance invariants, repair regressions, and overnight-delivery/import/clock/Sabha regressions. `npm test` is the shorter smoke/integration command. Tests default to installed Edge; `PLAYWRIGHT_CHANNEL=chromium` uses Playwright Chromium. `ASTRA_URL` selects another server and `PLAYWRIGHT_MODULE` can select an existing installation. CI installs Chromium and runs the complete check. Screenshots go to `qa/`; diagnostic JSON goes to `audits/`.
+The complete check runs smoke, gameplay/save integration, seven phone sizes, three speech layouts, performance invariants, repair regressions, and overnight-delivery/import/clock/Sabha regressions. `npm test` is the shorter smoke/integration command. Tests default to installed Edge; `PLAYWRIGHT_CHANNEL=chromium` uses Playwright Chromium. `ASTRA_URL` selects another server and `PLAYWRIGHT_MODULE` can select an existing installation. CI installs Chromium and runs the complete check in four independent groups with separate evidence artifacts. Screenshots go to `qa/`; diagnostic JSON goes to `audits/`.
 
 `npm run format` formats first-party source. `npm run build` bundles the pinned renderer, copies its complete license, and derives content-version queries for every local script/style, including the vendor. Commit the generated URLs with the source changes; do not ask players to hard-refresh.
 

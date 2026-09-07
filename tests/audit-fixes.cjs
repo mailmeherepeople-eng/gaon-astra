@@ -282,6 +282,17 @@ const assert = require("node:assert/strict");
       S.room.hotspots.find((h) => h.key === "clerk").act(),
     );
     assert.equal(await p.evaluate(() => S.talking.who.n), "Bansi Lal");
+    // A new speaker collapses choices once; their ongoing speech cannot lock voting.
+    await p.evaluate(() => draw());
+    await p.locator("#sabhaVoteToggle").click();
+    await p.evaluate(() => {
+      draw();
+      draw();
+    });
+    assert.equal(
+      await p.locator("#sabhaPanel details").getAttribute("open"),
+      "",
+    );
     await p.locator("#sabhaClose").click();
     assert.equal(
       await p.evaluate(() => S.talking.who.n),

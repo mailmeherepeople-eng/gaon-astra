@@ -15,6 +15,8 @@ This implements the eight confirmed findings in [the latest audit](LATEST-AUDIT-
 | R07: accounts disappear on reload | The save schema includes the last dawn summary and finished-at-dusk count. Older saves may omit them. | Summary matches before/after reload and the completion count survives. |
 | R08: blocking Sabha dialogue | New `sabha-ui.js` presents speakers through the shared bubble system. A compact, collapsible vote panel leaves the simulation running. Hear next can replace a speech; unrelated conversation can interrupt it. Closing the discussion preserves unrelated speech and allows the vote to be resumed that night. | Walk during speech, interact with the clerk, close/resume the discussion, hear another speaker and complete a vote without pausing. |
 
+GitHub runs the same complete suite in four independent groups (core, phones, speech/performance, regressions), each with its own evidence artifact. This keeps slow software rendering from delaying unrelated checks.
+
 The vote panel uses its own element IDs so it cannot conflict with election screens. Speaking to another person collapses the choices; the panel hides outside the hall or while a normal menu is open. It includes named controls and keyboard focus styles.
 
 ## Files and ownership

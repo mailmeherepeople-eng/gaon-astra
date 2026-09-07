@@ -9,7 +9,8 @@
     entries = [],
     next = 0,
     dismissed = true,
-    ownTalk = null;
+    ownTalk = null,
+    observedTalk = null;
   function valid() {
     return day === S.day && S.phase === "night" && !S.sabhaDone;
   }
@@ -67,10 +68,11 @@
     }
     const elsewhere =
       S.scene !== "interior" || S.room?.building.id !== "panchayat";
-    if (S.talking && S.talking !== ownTalk) {
+    if (S.talking && S.talking !== observedTalk && S.talking !== ownTalk) {
       const choices = panel.querySelector("details");
       if (choices) choices.open = false;
     }
+    observedTalk = S.talking;
     panel.classList.toggle(
       "hidden",
       dismissed || S.paused || S.asleep || elsewhere,

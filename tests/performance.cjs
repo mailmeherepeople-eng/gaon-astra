@@ -1,4 +1,4 @@
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const { chromium } = require("./browser.cjs");
 const assert = require("node:assert/strict");
 (async () => {
   const browser = await chromium.launch({
@@ -57,7 +57,10 @@ const assert = require("node:assert/strict");
         };
       });
       assert.equal(metrics.mobile, mobile);
-      assert.equal(metrics.shadows, !mobile);
+      assert.equal(
+        metrics.shadows,
+        process.env.ASTRA_TEST_QUALITY === "low" ? false : !mobile,
+      );
       if (mobile) {
         assert.ok(metrics.dpr <= 1.25);
         assert.ok(metrics.triangles < 850000);

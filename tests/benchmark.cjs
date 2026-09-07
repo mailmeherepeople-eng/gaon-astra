@@ -1,4 +1,4 @@
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const { chromium } = require("./browser.cjs");
 const fs = require("node:fs");
 (async () => {
   const browser = await chromium.launch({

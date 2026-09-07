@@ -70,3 +70,5 @@ The complete check runs smoke, gameplay/save integration, seven phone sizes, thr
 | scripts/build.cjs | Reproducible vendor and asset-version generation |
 
 The renderer is covered by [its MIT license](vendor/THREE-LICENSE.txt). Textbook PDFs remain local and excluded from Git. Physical-phone performance, Safari behavior, sustained thermal behavior and student outcomes require testing beyond desktop emulation.
+
+CI uses explicit SwiftShader and Low quality for functional checks on runners without a physical GPU. Local validation covers both phone Low and desktop High. The first CI attempt timed out on the default software graphics path; the test launcher now makes this environment difference explicit.

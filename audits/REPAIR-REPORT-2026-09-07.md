@@ -128,3 +128,5 @@ Representative phone-emulation outdoor observations: **191–459 calls and 93,83
 - Remaining external validation: named physical Android/iPhone/low-end laptop sessions, Safari, sustained heat/battery behavior, comprehensive accessibility testing and player enjoyment/learning outcomes.
 
 All code changes above are implemented. The external validation limits are deliberately left open; passing desktop automation cannot substitute for those results.
+
+CI uses explicit SwiftShader and Low quality for functional checks on runners without a physical GPU. Local validation covers both phone Low and desktop High. The first CI attempt timed out on the default software graphics path; the test launcher now makes this environment difference explicit.

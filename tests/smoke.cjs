@@ -1,4 +1,4 @@
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const { chromium } = require("./browser.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 fs.mkdirSync("qa", { recursive: true });

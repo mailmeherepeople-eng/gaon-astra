@@ -1,4 +1,4 @@
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const { chromium } = require("./browser.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 (async () => {
@@ -96,7 +96,9 @@ const fs = require("node:fs");
       GraphicsQuality.set("auto");
       for (let i = 0; i < 200; i++)
         GraphicsQuality.sample(40, performance.now() + 20000);
-      return { high, low, shadows, level: GraphicsQuality.level };
+      const result = { high, low, shadows, level: GraphicsQuality.level };
+      GraphicsQuality.set("low");
+      return result;
     });
     assert.ok(
       evidence.quality.low <= evidence.quality.high &&

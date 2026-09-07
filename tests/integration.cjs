@@ -1,4 +1,4 @@
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const { chromium } = require("./browser.cjs");
 const assert = require("node:assert/strict");
 (async () => {
   const b = await chromium.launch({

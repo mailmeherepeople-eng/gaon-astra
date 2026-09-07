@@ -1,0 +1,37 @@
+/* CI has no physical GPU. Functional checks run Low; local checks also cover High. */
+const { chromium: original } = require(
+  process.env.PLAYWRIGHT_MODULE || "playwright",
+);
+const chromium = {
+  launch: async (options) => {
+    const browser = await original.launch({
+      ...options,
+      args: process.env.CI
+        ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+        : options.args,
+    });
+    const context = browser.newContext.bind(browser);
+    browser.newContext = async (options) => {
+      const value = await context(options);
+      if (process.env.ASTRA_TEST_QUALITY)
+        await value.addInitScript(
+          (quality) => localStorage.setItem("gaon-astra-quality", quality),
+          process.env.ASTRA_TEST_QUALITY,
+        );
+      return value;
+    };
+    // newPage is a convenience API that may bypass the public newContext method.
+    const page = browser.newPage.bind(browser);
+    browser.newPage = async (options) => {
+      const value = await page(options);
+      if (process.env.ASTRA_TEST_QUALITY)
+        await value.addInitScript(
+          (quality) => localStorage.setItem("gaon-astra-quality", quality),
+          process.env.ASTRA_TEST_QUALITY,
+        );
+      return value;
+    };
+    return browser;
+  },
+};
+module.exports = { chromium };
